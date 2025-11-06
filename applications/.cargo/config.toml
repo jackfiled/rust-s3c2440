@@ -1,0 +1,9 @@
+[build]
+target = "armv4t-none-eabi"
+
+[target.armv4t-none-eabi]
+rustflags = [
+    "-C", "link-arg=-N",
+    "-C", "link-arg=-EL",
+    "-C", "link-arg=-Trust-s3c2440.ld"
+]

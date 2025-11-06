@@ -1,0 +1,7 @@
+[package]
+name = "uart-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust-s3c2440-base = { version = "0.1.0", path = "../../libraries/rust-s3c2440-base" }

@@ -1,3 +1,4 @@
 [workspace]
 members = ["applications/*","libraries/*"]
+exclude = ["applications/.cargo"]
 resolver = "3"

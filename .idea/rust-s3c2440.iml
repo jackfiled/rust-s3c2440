@@ -5,6 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/applications/flash-reader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/rust-s3c2440-base/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/rust-s3c2440-library/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/applications/uart-test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

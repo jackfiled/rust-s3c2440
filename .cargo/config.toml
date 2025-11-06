@@ -1,5 +1,2 @@
-[build]
-target = "armv4t-none-eabi"
-
 [unstable]
 build-std = ["core"]
