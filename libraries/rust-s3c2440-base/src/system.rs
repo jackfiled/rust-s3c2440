@@ -1,46 +1,48 @@
 //! This file contains most S3C2440 constant definitions such as registers and configurations.
 //! Some configurations are not very semantic and well-documented.
 #![allow(dead_code)]
+
 use bitflags::bitflags;
 use seq_macro::seq;
 
+pub mod clock;
 mod start;
 mod trap_stack;
 
-pub(crate) const LOCAL_MEMORY_ADDRESS: usize = 0x3000_0000;
-pub(crate) const LOCAL_MEMORY_BUS_ADDRESS: usize = LOCAL_MEMORY_ADDRESS;
-pub(crate) const LOCAL_MEMORY_SIZE: usize = 0x0400_0000; // The memory size of s3c2440x is 64MB.
-pub(crate) const LOCAL_MEMORY_END_ADDRESS: usize = LOCAL_MEMORY_ADDRESS + LOCAL_MEMORY_SIZE;
+pub const LOCAL_MEMORY_ADDRESS: usize = 0x3000_0000;
+pub const LOCAL_MEMORY_BUS_ADDRESS: usize = LOCAL_MEMORY_ADDRESS;
+pub const LOCAL_MEMORY_SIZE: usize = 0x0400_0000; // The memory size of s3c2440x is 64MB.
+pub const LOCAL_MEMORY_END_ADDRESS: usize = LOCAL_MEMORY_ADDRESS + LOCAL_MEMORY_SIZE;
 
 /// Base address used for interrupt vector table.
 /// Not known about its name meaning.
-pub(crate) const EXC_BASE_ADDRESS: usize = 0x3000_0100;
+pub const EXC_BASE_ADDRESS: usize = 0x3000_0100;
 
-pub(crate) const WATCHDOG_ADDRESS: usize = 0x53000000;
-pub(crate) const WATCHDOG_INITIAL_VALUE: u32 = 0x0;
+pub const WATCHDOG_ADDRESS: usize = 0x53000000;
+pub const WATCHDOG_INITIAL_VALUE: u32 = 0x0;
 
 /// MMU configuration.
 /// PROG32 = 1 << 4, DATA32 = 1 << 5, L_ENANBLE = 1 << 6, ROM = 1 << 9 and W_ENABLE = 1 << 3.
-pub(crate) const MMU_INITIAL_VALUE: u32 = (1 << 4) | (1 << 5) | (1 << 6) | (1 << 9) | (1 << 3);
+pub const MMU_INITIAL_VALUE: u32 = (1 << 4) | (1 << 5) | (1 << 6) | (1 << 9) | (1 << 3);
 
-pub(crate) const MASK_MODE: u32 = 0x3F;
-pub(crate) const MODE_SVC32: u32 = 0x13;
-pub(crate) const I_BIT: u32 = 1 << 7;
-pub(crate) const F_BIT: u32 = 1 << 6;
+pub const MASK_MODE: u32 = 0x3F;
+pub const MODE_SVC32: u32 = 0x13;
+pub const I_BIT: u32 = 1 << 7;
+pub const F_BIT: u32 = 1 << 6;
 
-pub(crate) const INTERRUPT_MASK_ADDRESS: usize = 0x4A00_0008;
-pub(crate) const INTERRUPT_SUBMASK_ADDRESS: usize = 0x4A00_001C;
+pub const INTERRUPT_MASK_ADDRESS: usize = 0x4A00_0008;
+pub const INTERRUPT_SUBMASK_ADDRESS: usize = 0x4A00_001C;
 
-pub(crate) const MMU_ASYNC: u32 = 3 << 30;
+pub const MMU_ASYNC: u32 = 3 << 30;
 
-pub(crate) const LOCKTIME_ADDRESS: usize = 0x4C00_0000;
+pub const LOCKTIME_ADDRESS: usize = 0x4C00_0000;
 // The value in the reference code is setting LOCKTIME to 0x00FFFFFF, which is weird.
-pub(crate) const LOCKTIME_INITIAL_VALUE: u32 = (0xFFFF << 0) + (0x00FF << 16);
+pub const LOCKTIME_INITIAL_VALUE: u32 = (0xFFFF << 0) + (0x00FF << 16);
 
-pub(crate) const CLOCK_DIV_ADDRESS: usize = 0x4C00_0014;
-pub(crate) const CLOCK_DIV_INITIAL_VALUE: u32 = 0x3;
+pub const CLOCK_DIV_ADDRESS: usize = 0x4C00_0014;
+pub const CLOCK_DIV_INITIAL_VALUE: u32 = 0x3;
 
-pub(crate) const MPLL_ADDRESS: usize = 0x4C00_0004;
+pub const MPLL_ADDRESS: usize = 0x4C00_0004;
 
 /// The MPLLCON register will control the output clock of PLL.
 /// This register contains three parts: MDIV[19:12], PDIV[9:4] and SDIV[3:0].
@@ -48,17 +50,17 @@ pub(crate) const MPLL_ADDRESS: usize = 0x4C00_0004;
 /// F_out = 2 * (MDIV + 8) * F_in / ((PDIV + 2) * 2^SDIV)
 /// And for this tq2440 board, the input clock is 12MHz, so the output clock will be
 /// F_out = 2 * (97 + 8) * 12 / (3 * 2^2) = 210MHz
-pub(crate) const MPLL_INITIAL_VALUE: u32 = 0x61012;
+pub const MPLL_INITIAL_VALUE: u32 = 0x61012;
 
-pub(crate) const CLOCK_ADDRESS: usize = 0x4C00_000C;
-pub(crate) const CLOCK_INITIAL_VALUE: u32 = 0x00043D10;
+pub const CLOCK_ADDRESS: usize = 0x4C00_000C;
+pub const CLOCK_INITIAL_VALUE: u32 = 0x00043D10;
 
-pub(crate) const SLOW_CLOCK_ADDRESS: usize = 0x4C00_0010;
-pub(crate) const SLOW_CLOCK_INITIAL_VALUE: u32 = 0x0000_0084;
+pub const SLOW_CLOCK_ADDRESS: usize = 0x4C00_0010;
+pub const SLOW_CLOCK_INITIAL_VALUE: u32 = 0x0000_0084;
 
-pub(crate) const BUS_WIDTH_ADDRESS: usize = 0x4800_0000;
+pub const BUS_WIDTH_ADDRESS: usize = 0x4800_0000;
 seq!(N in 0..8 {
-    pub(crate) const BANK_ADDRESS~N: usize = BUS_WIDTH_ADDRESS + (N + 1) * 0x4;
+    pub const BANK_ADDRESS~N: usize = BUS_WIDTH_ADDRESS + (N + 1) * 0x4;
 });
 
 pub const DW1: u32 = 2 << 4;
@@ -107,19 +109,19 @@ pub const BUS_WIDTH_INITIAL_VALUE: u32 = DW1
 pub const BANK6_INITIAL_VALUE: u32 =
     (1 << 0) + (1 << 2) + (0 << 4) + (0 << 6) + (0 << 8) + (0 << 11) + (0 << 13) + (3 << 15);
 
-pub(crate) const REFRESH_ADDRESS: usize = 0x4800_0024;
-pub(crate) const REFRESH_INITIAL_VALUE: u32 = 0x008E_0459;
+pub const REFRESH_ADDRESS: usize = 0x4800_0024;
+pub const REFRESH_INITIAL_VALUE: u32 = 0x008E_0459;
 
-pub(crate) const BANKSIZE_ADDRESS: usize = 0x4800_0028;
-pub(crate) const BANKSIZE_INITIAL_VALUE: u32 = 0x32;
+pub const BANKSIZE_ADDRESS: usize = 0x4800_0028;
+pub const BANKSIZE_INITIAL_VALUE: u32 = 0x32;
 
-pub(crate) const MRSRB6_ADDRESS: usize = 0x4800_002c;
-pub(crate) const MRSRB6_INITIAL_VALUE: u32 = 0x30;
+pub const MRSRB6_ADDRESS: usize = 0x4800_002c;
+pub const MRSRB6_INITIAL_VALUE: u32 = 0x30;
 
 bitflags! {
     /// Boot mode of S3C2440.
     #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-    pub(crate) struct BootMode: u32 {
+    pub struct BootMode: u32 {
         const NORMAL = 0x00;
         const NO_AUTO = 0x01;
         const CLEAR = 0x02;
@@ -130,8 +132,8 @@ bitflags! {
 /// Below three clocks are generated by clock system.
 ///
 /// FCLK = 210MHz.
-pub(crate) const FCLK: u32 = 210_000_000;
+pub const FCLK: u32 = 210_000_000;
 /// HCLK = 105MHz.
-pub(crate) const HCLK: u32 = 105_000_000;
+pub const HCLK: u32 = 105_000_000;
 /// PCLK = 52.5MHz.
-pub(crate) const PCLK: u32 = 52_500_000;
+pub const PCLK: u32 = 52_500_000;

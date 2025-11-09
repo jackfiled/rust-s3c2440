@@ -1,6 +1,7 @@
 //! This file implements support for the UART controller in S3C2440 SoC which is designed by Samsang.
 use crate::Register;
 use core::cell::UnsafeCell;
+use crate::hardware::nop;
 
 const UART_CONTROLLER0: usize = 0x5000_0000;
 const UART_CONTROLLER1: usize = 0x5000_4000;
@@ -63,26 +64,7 @@ impl S3C2440UartControllerInner {
 
         // After setting values, wait for some time.
         for _ in 0..100 {
-            core::hint::spin_loop();
-        }
-    }
-
-    fn read(&self) -> u8 {
-        // Wait for receiver buffer ready.
-        while !self.is_receive_buffer_empty() {
-            core::hint::spin_loop();
-        }
-
-        self.receive_buffer.read()
-    }
-
-    fn write(&self, buffer: &[u8]) {
-        for &c in buffer {
-            while !self.is_sender_buffer_empty() {
-                core::hint::spin_loop();
-            }
-
-            self.send_buffer.write(c);
+            nop();
         }
     }
 
@@ -104,6 +86,7 @@ impl S3C2440UartControllerInner {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct S3C2440UartController {
     inner: *const S3C2440UartControllerInner,
 }
@@ -125,12 +108,38 @@ impl S3C2440UartController {
         self.inner().init(clock, baud_rate);
     }
 
-    pub fn read(&self) -> u8 {
-        self.inner().read()
+    /// Read the UART port non-blockingly.
+    /// # Returns
+    /// The read byte count.
+    pub fn try_read(&self, buffer: &mut [u8]) -> usize {
+        let mut count = 0;
+        for i in 0..buffer.len() {
+            if self.inner().is_receive_buffer_empty() {
+                break;
+            }
+
+            buffer[i] = self.inner().receive_buffer.read();
+            count += 1;
+        }
+
+        count
     }
 
-    pub fn write(&self, buffer: &[u8]) {
-        self.inner().write(buffer);
+    /// Write the UART port non-blockingly.
+    /// # Returns
+    /// Written byte count.
+    pub fn try_write(&self, buffer: &[u8]) -> usize {
+        let mut count = 0;
+        for &b in buffer {
+            if self.inner().is_sender_buffer_empty() {
+                self.inner().send_buffer.write(b);
+                count += 1;
+            } else {
+                break;
+            }
+        }
+
+        count
     }
 
     #[inline]

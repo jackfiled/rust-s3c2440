@@ -1,12 +1,18 @@
 #![no_std]
 #![no_main]
 
-use crate::system::PCLK;
+use crate::manager::{InitializeConfiguration, Manager};
 use core::panic::PanicInfo;
-use rust_s3c2440_library::gpio::GPIOController;
-use rust_s3c2440_library::uart::S3C2440UartController;
+use rust_s3c2440_library::software::LogLevel;
 
-mod system;
+#[macro_use]
+extern crate rust_s3c2440_library;
+
+mod manager;
+pub mod system;
+mod utils;
+
+pub use manager::MANAGER;
 
 // Make the linker happy, as the rust_main will be defined in application crate.
 unsafe extern "C" {
@@ -27,15 +33,16 @@ macro_rules! entry {
 
 /// Hook function will be called before entry function running.
 pub fn init_board() {
-    // Initialize GPIO controller.
-    let gpio_controller = GPIOController::new();
-    gpio_controller.initialize();
+    let mut manager = Manager::new();
+    manager.initialize(&InitializeConfiguration {
+        uart_port: 0,
+        uart_buad_rate: 115200,
+        log_level: LogLevel::Info,
+    });
+    MANAGER.init(manager);
+    info!("Board manager is initialized.");
 
-    // Initialize UART port.
-    let uart_controller = S3C2440UartController::uart_controller0();
-    uart_controller.initialize(PCLK, 115200);
-
-    uart_controller.write(b"Hello from Rust!");
+    println!("Hello from Rust!");
 }
 
 #[panic_handler]

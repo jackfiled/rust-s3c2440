@@ -42,4 +42,5 @@ name = "uart-test"
 version = "0.1.0"
 dependencies = [
  "rust-s3c2440-base",
+ "rust-s3c2440-library",
 ]
