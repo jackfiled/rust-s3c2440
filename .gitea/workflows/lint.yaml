@@ -1,0 +1,22 @@
+name: Code Format & Code Lint
+on: [ push ]
+jobs:
+  Code-Lint:
+    runs-on: archlinux
+    steps:
+      - uses: https://mirrors.rrricardo.top/actions/checkout.git@v4
+        name: Check out code
+      - name: Setup rust toolchain
+        run: |
+          export RUSTUP_UPDATE_ROOT=https://mirrors.cernet.edu.cn/rustup/rustup
+          export RUSTUP_DIST_SERVER=https://mirrors.cernet.edu.cn/rustup
+          rustup toolchain install nightly
+          rustup component add rust-src
+      - name: Run format check
+        run: cargo fmt --check
+      - name: Run lint on each application
+        run: |
+          cd applications/uart-test
+          cargo check
+          cd ../flash-reader
+          cargo check

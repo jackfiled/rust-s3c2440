@@ -15,7 +15,7 @@ fn delay_cycles(mut cycles: u32) {
                 "nop",
                 "nop",
                 "nop",
-                options(nomem, nostack, preserve_flags)
+                options(nomem, nostack, preserves_flags)
             );
         }
 

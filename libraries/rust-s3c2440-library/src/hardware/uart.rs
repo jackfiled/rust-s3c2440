@@ -1,7 +1,7 @@
 //! This file implements support for the UART controller in S3C2440 SoC which is designed by Samsang.
 use crate::Register;
-use core::cell::UnsafeCell;
 use crate::hardware::nop;
+use core::cell::UnsafeCell;
 
 const UART_CONTROLLER0: usize = 0x5000_0000;
 const UART_CONTROLLER1: usize = 0x5000_4000;
