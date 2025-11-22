@@ -1,11 +1,11 @@
-use crate::Register;
+use crate::utils::Register;
 use seq_macro::seq;
 
 /// GPIO controller registers.
 /// Almost all port has three control registers, listed as control, data and pull-up register except
 /// GPIO A port.
 #[repr(C)]
-struct GPIOPortController {
+pub(super) struct GPIOPortController {
     pub control_register: Register,
     pub data_register: Register,
     pub pull_up_register: Register,
@@ -29,14 +29,14 @@ const GPHCON: usize = 0x56000070; // Port H control
 
 const GPJCON: usize = 0x560000d0; // Port J control
 
-pub struct GPIOController {
-    port_a: *const GPIOPortController,
-    port_b: *const GPIOPortController,
-    port_c: *const GPIOPortController,
-    port_d: *const GPIOPortController,
-    port_e: *const GPIOPortController,
-    port_f: *const GPIOPortController,
-    port_g: *const GPIOPortController,
+pub(super) struct GPIOController {
+    pub port_a: *const GPIOPortController,
+    pub port_b: *const GPIOPortController,
+    pub port_c: *const GPIOPortController,
+    pub port_d: *const GPIOPortController,
+    pub port_e: *const GPIOPortController,
+    pub port_f: *const GPIOPortController,
+    pub port_g: *const GPIOPortController,
     /// Port H contains the UART port, so document it here.
     /// Port H contains 11 ports, each 2 bit control 1 port.
     /// For each port, when configured as 00, it is set as input mode and when configured as 01, it
@@ -45,12 +45,15 @@ pub struct GPIOController {
     /// When port set to 10, GPH10 = CLKOUT1, GPH9 = CLKOUT0, GPH8 = UEXTCLK, GPH7 = RXD2,
     /// GPH6 = TXD2, GPH5 = RXD1, GPH4 = TXD1, GPH3 = RXD0, GPH2 = TXD0, GPH1 = nRTS0, GPH0 = nCTS0.
     /// 00 is reserved.
-    port_h: *const GPIOPortController,
-    port_j: *const GPIOPortController,
+    pub port_h: *const GPIOPortController,
+    pub port_j: *const GPIOPortController,
 }
 
+// Implement Sync trait for GPIOController as the controller is a global variable.
+unsafe impl Sync for GPIOController {}
+
 impl GPIOController {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             port_a: GPACON as *const GPIOPortController,
             port_b: GPBCON as *const GPIOPortController,
@@ -100,13 +103,15 @@ impl GPIOController {
 
     seq!(N in 'a'..='h' {
         #[inline]
-        fn port_~N(&self) -> &GPIOPortController {
+        pub fn port_~N(&self) -> &GPIOPortController {
             unsafe { &(*self.port_~N) }
         }
     });
 
     #[inline]
-    fn port_j(&self) -> &GPIOPortController {
+    pub fn port_j(&self) -> &GPIOPortController {
         unsafe { &(*self.port_j) }
     }
 }
+
+pub(super) static GPIOCONTROLLER: GPIOController = GPIOController::new();

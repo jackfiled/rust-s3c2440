@@ -1,6 +1,8 @@
-//! This file implements support for the UART controller in S3C2440 SoC which is designed by Samsang.
-use crate::Register;
-use crate::hardware::nop;
+use crate::gpio::{
+    PortHPin2, PortHPin3, PortHPin4, PortHPin5, PortHPin6, PortHPin7, UartReceive, UartTransmit,
+};
+use crate::nop;
+use crate::utils::Register;
 use core::cell::UnsafeCell;
 
 const UART_CONTROLLER0: usize = 0x5000_0000;
@@ -87,23 +89,45 @@ impl S3C2440UartControllerInner {
 }
 
 #[derive(Copy, Clone)]
+pub struct S3C2440UartControllerBuilder {
+    inner: *const S3C2440UartControllerInner,
+}
+
+#[derive(Copy, Clone)]
 pub struct S3C2440UartController {
     inner: *const S3C2440UartControllerInner,
 }
 
-impl S3C2440UartController {
-    pub fn uart_controller0() -> Self {
+impl S3C2440UartControllerBuilder {
+    pub fn uart_controller0(_: PortHPin2<UartTransmit>, _: PortHPin3<UartReceive>) -> Self {
         Self::new(UART_CONTROLLER0)
     }
 
-    pub fn uart_controller1() -> Self {
+    pub fn uart_controller1(_: PortHPin4<UartTransmit>, _: PortHPin5<UartReceive>) -> Self {
         Self::new(UART_CONTROLLER1)
     }
 
-    pub fn uart_controller2() -> Self {
+    pub fn uart_controller2(_: PortHPin6<UartTransmit>, _: PortHPin7<UartReceive>) -> Self {
         Self::new(UART_CONTROLLER2)
     }
 
+    pub fn initialize(self, clock: u32, baud_rate: u32) -> S3C2440UartController {
+        unsafe {
+            (*self.inner).init(clock, baud_rate);
+        }
+
+        S3C2440UartController { inner: self.inner }
+    }
+
+    #[inline]
+    fn new(base: usize) -> Self {
+        Self {
+            inner: base as *const S3C2440UartControllerInner,
+        }
+    }
+}
+
+impl S3C2440UartController {
     pub fn initialize(&self, clock: u32, baud_rate: u32) {
         self.inner().init(clock, baud_rate);
     }
@@ -140,13 +164,6 @@ impl S3C2440UartController {
         }
 
         count
-    }
-
-    #[inline]
-    fn new(base: usize) -> Self {
-        Self {
-            inner: base as *const S3C2440UartControllerInner,
-        }
     }
 
     #[inline]

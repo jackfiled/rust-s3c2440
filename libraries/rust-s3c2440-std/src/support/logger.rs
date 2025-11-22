@@ -1,7 +1,7 @@
-use crate::Global;
 use core::fmt::{Arguments, Display, Formatter};
+use rust_s3c2440_hal::Global;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum LogLevel {
     Debug,
     Info,
@@ -24,20 +24,12 @@ pub trait Log {
     fn log(&self, level: LogLevel, agrs: Arguments);
 }
 
-struct NopLogger;
-
-impl Log for NopLogger {
-    fn log(&self, _: LogLevel, _: Arguments) {}
-}
-
 struct LogContext {
     logger: &'static dyn Log,
     log_level: LogLevel,
 }
 
 static CONTEXT: Global<LogContext> = Global::new();
-
-pub static mut LOGGER: &dyn Log = &NopLogger;
 
 pub fn set_logger(logger: &'static dyn Log, level: LogLevel) {
     CONTEXT.init(LogContext {
@@ -46,16 +38,18 @@ pub fn set_logger(logger: &'static dyn Log, level: LogLevel) {
     });
 }
 
-pub fn get_logger() -> &'static dyn Log {
-    unsafe { CONTEXT.get_unchecked().logger }
+pub fn get_logger() -> (&'static dyn Log, LogLevel) {
+    let context = unsafe { CONTEXT.get_unchecked() };
+
+    (context.logger, context.log_level)
 }
 
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
-        use core::fmt::Write;
-        unsafe {
-            $crate::software::get_logger().log(LogLevel::Debug, core::format_args!($($arg)*));
+        let (logger, log_level) = $crate::support::get_logger();
+        if $crate::support::LogLevel::Debug >= log_level {
+            logger.log($crate::support::LogLevel::Debug, core::format_args!($($arg)*))
         }
     }
 }
@@ -63,9 +57,9 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        use core::fmt::Write;
-        unsafe {
-            $crate::software::get_logger().log(LogLevel::Info, core::format_args!($($arg)*));
+        let (logger, log_level) = $crate::support::get_logger();
+        if $crate::support::LogLevel::Info >= log_level {
+            logger.log($crate::support::LogLevel::Info, core::format_args!($($arg)*))
         }
     }
 }
@@ -73,9 +67,9 @@ macro_rules! info {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        use core::fmt::Write;
-        unsafe {
-            $crate::software::get_logger().log(LogLevel::Warn, core::format_args!($($arg)*));
+        let (logger, log_level) = $crate::support::get_logger();
+        if $crate::support::LogLevel::Warn >= log_level {
+            logger.log($crate::support::LogLevel::Warn, core::format_args!($($arg)*))
         }
     }
 }
@@ -83,9 +77,9 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        use core::fmt::Write;
-        unsafe {
-            $crate::software::get_logger().log(LogLevel::Error, core::format_args!($($arg)*));
+        let (logger, log_level) = $crate::support::get_logger();
+        if $crate::support::LogLevel::Error >= log_level {
+            logger.log($crate::support::LogLevel::Error, core::format_args!($($arg)*))
         }
     }
 }

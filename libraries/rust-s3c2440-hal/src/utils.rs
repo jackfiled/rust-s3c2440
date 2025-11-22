@@ -1,25 +1,34 @@
-#![no_std]
-#![allow(dead_code)]
 use core::cell::UnsafeCell;
 use core::ptr;
 
-pub mod hardware;
-pub mod software;
-
 #[repr(transparent)]
-pub struct Register(UnsafeCell<u32>);
+pub(crate) struct Register(UnsafeCell<u32>);
 
 impl Register {
     /// Read the register.
+    #[inline]
     pub fn read(&self) -> u32 {
         unsafe { self.0.get().read_volatile() }
     }
 
     /// Write the register.
+    #[inline]
     pub fn write(&self, value: u32) {
         unsafe {
             self.0.get().write_volatile(value);
         }
+    }
+
+    #[inline]
+    pub fn set_bit(&self, value: u32, offset: u32) {
+        let origin = self.read();
+        self.write(origin | (value << offset));
+    }
+
+    #[inline]
+    pub fn is_bit_one(&self, offset: u32) -> bool {
+        let result = self.read() & (1 << offset);
+        result != 0
     }
 }
 
@@ -66,5 +75,30 @@ impl<T> Global<T> {
 
     pub unsafe fn get_unchecked(&self) -> &T {
         unsafe { &*(self.value.get() as *const T) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn reigster_read_write_test() {
+        let register = Register(UnsafeCell::new(0));
+
+        assert_eq!(0, register.read());
+        register.write(2);
+        assert_eq!(2, register.read());
+    }
+
+    #[test]
+    pub fn register_set_bit_test() {
+        let register = Register(UnsafeCell::new(0));
+
+        assert_eq!(0, register.read());
+        register.set_bit(1, 0);
+        assert_eq!(1, register.read());
+        register.set_bit(1, 1);
+        assert_eq!(3, register.read());
     }
 }

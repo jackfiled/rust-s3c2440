@@ -1,5 +1,6 @@
-use crate::hardware::{S3C2440UartController, nop};
 use core::fmt::Write;
+use rust_s3c2440_hal::nop;
+use rust_s3c2440_hal::uart::S3C2440UartController;
 
 #[derive(Copy, Clone)]
 pub struct S3C2440Console {
@@ -28,6 +29,10 @@ impl S3C2440Console {
         }
 
         result
+    }
+
+    pub fn read(&self, buffer: &mut [u8]) -> super::Result<usize> {
+        Ok(self.uart_controller.try_read(buffer))
     }
 }
 

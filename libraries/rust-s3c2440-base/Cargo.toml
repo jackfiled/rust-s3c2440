@@ -1,9 +1,0 @@
-[package]
-name = "rust-s3c2440-base"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-bitflags = "2.10.0"
-seq-macro = "0.3.6"
-rust-s3c2440-library = { version = "0.1.0", path = "../rust-s3c2440-library" }

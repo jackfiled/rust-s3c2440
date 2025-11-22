@@ -1,14 +1,12 @@
 #![no_std]
 #![no_main]
+#![allow(dead_code)]
 
 use crate::manager::{InitializeConfiguration, Manager};
 use core::panic::PanicInfo;
-use rust_s3c2440_library::software::LogLevel;
-
-#[macro_use]
-extern crate rust_s3c2440_library;
 
 mod manager;
+pub mod support;
 pub mod system;
 mod utils;
 
@@ -19,30 +17,21 @@ unsafe extern "C" {
     fn rust_main() -> !;
 }
 
+use crate::support::LogLevel;
 /// Use this macro to decorate the user main function.
-#[macro_export]
-macro_rules! entry {
-    ($path:path) => {
-        #[unsafe(no_mangle)]
-        pub fn rust_main() -> ! {
-            $crate::init_board();
-            $path()
-        }
-    };
-}
+/// Reimport from rust-s3c2440-macros.
+pub use rust_s3c2440_macros::entry;
+
+const CONFIGURATION: InitializeConfiguration = InitializeConfiguration {
+    uart_port: 0,
+    uart_buad_rate: 115200,
+    log_level: LogLevel::Info,
+};
 
 /// Hook function will be called before entry function running.
 pub fn init_board() {
-    let mut manager = Manager::new();
-    manager.initialize(&InitializeConfiguration {
-        uart_port: 0,
-        uart_buad_rate: 115200,
-        log_level: LogLevel::Info,
-    });
-    MANAGER.init(manager);
+    Manager::initialize(CONFIGURATION);
     info!("Board manager is initialized.");
-
-    println!("Hello from Rust!");
 }
 
 #[panic_handler]

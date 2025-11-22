@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rust-s3c2440-base = { version = "0.1.0", path = "../../libraries/rust-s3c2440-base" }
-rust-s3c2440-library = { version = "0.1.0", path = "../../libraries/rust-s3c2440-library" }
+rust-s3c2440-std = { version = "0.1.0", path = "../../libraries/rust-s3c2440-std" }
+rust-s3c2440-hal = { version = "0.1.0", path = "../../libraries/rust-s3c2440-hal" }

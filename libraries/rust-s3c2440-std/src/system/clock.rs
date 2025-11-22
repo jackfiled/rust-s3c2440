@@ -1,6 +1,6 @@
 use crate::system::FCLK;
 use core::arch::asm;
-use rust_s3c2440_library::hardware::nop;
+use rust_s3c2440_hal::nop;
 
 fn delay_cycles(mut cycles: u32) {
     // Group 8 nops once to decrease the cost of loop.

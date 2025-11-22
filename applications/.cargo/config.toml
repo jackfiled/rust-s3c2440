@@ -7,3 +7,6 @@ rustflags = [
     "-C", "link-arg=-EL",
     "-C", "link-arg=-Trust-s3c2440.ld"
 ]
+
+[unstable]
+build-std = ["core"]
