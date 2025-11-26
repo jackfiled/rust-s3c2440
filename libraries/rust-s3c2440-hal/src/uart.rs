@@ -4,6 +4,7 @@ use crate::gpio::{
 use crate::nop;
 use crate::utils::Register;
 use core::cell::UnsafeCell;
+use core::ops::Deref;
 
 const UART_CONTROLLER0: usize = 0x5000_0000;
 const UART_CONTROLLER1: usize = 0x5000_4000;
@@ -27,7 +28,7 @@ impl UartBufferRegister {
 }
 
 #[repr(C)]
-struct S3C2440UartControllerInner {
+pub struct S3C2440UartControllerInner {
     /// ULCON register.
     line_control: Register,
     /// UCON register.
@@ -98,6 +99,14 @@ pub struct S3C2440UartController {
     inner: *const S3C2440UartControllerInner,
 }
 
+impl Deref for S3C2440UartController {
+    type Target = S3C2440UartControllerInner;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &(*self.inner) }
+    }
+}
+
 impl S3C2440UartControllerBuilder {
     pub fn uart_controller0(_: PortHPin2<UartTransmit>, _: PortHPin3<UartReceive>) -> Self {
         Self::new(UART_CONTROLLER0)
@@ -129,7 +138,7 @@ impl S3C2440UartControllerBuilder {
 
 impl S3C2440UartController {
     pub fn initialize(&self, clock: u32, baud_rate: u32) {
-        self.inner().init(clock, baud_rate);
+        self.init(clock, baud_rate);
     }
 
     /// Read the UART port non-blockingly.
@@ -138,11 +147,11 @@ impl S3C2440UartController {
     pub fn try_read(&self, buffer: &mut [u8]) -> usize {
         let mut count = 0;
         for i in 0..buffer.len() {
-            if self.inner().is_receive_buffer_empty() {
+            if self.is_receive_buffer_empty() {
                 break;
             }
 
-            buffer[i] = self.inner().receive_buffer.read();
+            buffer[i] = self.receive_buffer.read();
             count += 1;
         }
 
@@ -155,8 +164,8 @@ impl S3C2440UartController {
     pub fn try_write(&self, buffer: &[u8]) -> usize {
         let mut count = 0;
         for &b in buffer {
-            if self.inner().is_sender_buffer_empty() {
-                self.inner().send_buffer.write(b);
+            if self.is_sender_buffer_empty() {
+                self.send_buffer.write(b);
                 count += 1;
             } else {
                 break;
@@ -164,11 +173,6 @@ impl S3C2440UartController {
         }
 
         count
-    }
-
-    #[inline]
-    fn inner(&self) -> &S3C2440UartControllerInner {
-        unsafe { &(*self.inner) }
     }
 }
 

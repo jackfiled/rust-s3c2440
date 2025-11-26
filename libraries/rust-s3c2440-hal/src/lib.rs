@@ -4,8 +4,10 @@
 use core::arch::asm;
 
 pub mod gpio;
+pub mod nand;
 pub mod uart;
 mod utils;
+
 pub use utils::Global;
 
 #[inline(always)]

@@ -11,6 +11,16 @@ impl Register {
         unsafe { self.0.get().read_volatile() }
     }
 
+    #[inline]
+    pub fn read_u8(&self) -> u8 {
+        unsafe { ptr::read_volatile(self.0.get() as *const u8) }
+    }
+
+    #[inline]
+    pub fn read_u16(&self) -> u16 {
+        unsafe { ptr::read_volatile(self.0.get() as *const u16) }
+    }
+
     /// Write the register.
     #[inline]
     pub fn write(&self, value: u32) {
@@ -20,9 +30,38 @@ impl Register {
     }
 
     #[inline]
+    pub fn write_u16(&self, value: u16) {
+        unsafe {
+            ptr::write_volatile(self.0.get() as *mut u16, value);
+        }
+    }
+
+    #[inline]
+    pub fn write_u8(&self, value: u8) {
+        unsafe {
+            ptr::write_volatile(self.0.get() as *mut u8, value);
+        }
+    }
+
+    #[inline]
     pub fn set_bit(&self, value: u32, offset: u32) {
         let origin = self.read();
+
+        // The 0 will be handled specially.
+        if value == 0 {
+            let mask = 1 << offset;
+            self.write(origin & !mask);
+            return;
+        }
+
         self.write(origin | (value << offset));
+    }
+
+    #[inline]
+    pub fn clear_bit(&self, offset: u32, width: u32) {
+        let mask = ((1 << width) - 1) << offset;
+        let origin = self.read();
+        self.write(origin & !mask);
     }
 
     #[inline]
@@ -100,5 +139,22 @@ mod tests {
         assert_eq!(1, register.read());
         register.set_bit(1, 1);
         assert_eq!(3, register.read());
+    }
+
+    #[test]
+    pub fn register_set_zero_test() {
+        let register = Register(UnsafeCell::new(0));
+
+        assert_eq!(0, register.read());
+        register.set_bit(1, 1);
+        assert_eq!(2, register.read());
+        register.set_bit(0, 1);
+        assert_eq!(0, register.read());
+
+        register.write(1);
+        assert_eq!(1, register.read());
+        register.set_bit(1, 1);
+        register.set_bit(0, 1);
+        assert_eq!(1, register.read());
     }
 }

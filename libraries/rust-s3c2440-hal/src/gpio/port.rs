@@ -133,6 +133,11 @@ seq!(N in 0..=22 {
     }
 });
 
+pub struct PortGPin<F: PinFunction> {
+    pin: u32,
+    _p: PhantomData<F>,
+}
+
 pub struct PortHPin<F: PinFunction> {
     pin: u32,
     _p: PhantomData<F>,
