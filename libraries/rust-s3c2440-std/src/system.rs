@@ -52,6 +52,8 @@ pub const MPLL_ADDRESS: usize = 0x4C00_0004;
 /// F_out = 2 * (97 + 8) * 12 / (3 * 2^2) = 210MHz
 pub const MPLL_INITIAL_VALUE: u32 = 0x61012;
 
+/// The clock register controls all clock for CPU and other peripherals.
+/// Refer to rust-s3c2440-hal/clock.rs.
 pub const CLOCK_ADDRESS: usize = 0x4C00_000C;
 pub const CLOCK_INITIAL_VALUE: u32 = 0x00043D10;
 

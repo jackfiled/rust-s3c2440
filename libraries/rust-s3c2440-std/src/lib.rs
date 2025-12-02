@@ -35,6 +35,6 @@ pub fn init_board() {
 }
 
 #[panic_handler]
-pub fn panic_hanlder(_: &PanicInfo) -> ! {
+pub fn panic_handler(_: &PanicInfo) -> ! {
     loop {}
 }

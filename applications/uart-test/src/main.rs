@@ -13,8 +13,8 @@ use rust_s3c2440_std::system::PCLK;
 #[entry(call_init = false)]
 fn main() -> ! {
     let controller = S3C2440UartControllerBuilder::uart_controller0(
-        PortHPin2::init().into_uart_transmit(),
-        PortHPin3::init().into_uart_receive(),
+        PortHPin2::new().into_uart_transmit(),
+        PortHPin3::new().into_uart_receive(),
     )
     .initialize(PCLK, 115200);
 

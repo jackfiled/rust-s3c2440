@@ -68,8 +68,32 @@ pub struct UartTransmit {}
 /// Indicating a pin is used as UART RX port.
 pub struct UartReceive {}
 
-impl PinFunction for UartTransmit {}
-impl Sealed for UartTransmit {}
+/// IIS left/right select.
+pub struct IisLrSelect {}
+/// IIS Clock.
+pub struct IisClock {}
+/// IIS serial data input.
+pub struct IisSerialDataInput {}
+/// IIS serial data output.
+pub struct IisSerialDataOutput {}
+/// IIS codec clock.
+pub struct CodecClock {}
 
-impl PinFunction for UartReceive {}
-impl Sealed for UartReceive {}
+macro_rules! impl_pin_function {
+    ($($struct_name:ident),+ $(,)?) => {
+        $(
+            impl $crate::gpio::state::sealed::Sealed for $struct_name {}
+            impl $crate::gpio::state::PinFunction for $struct_name {}
+        )+
+    };
+}
+
+impl_pin_function!(
+    UartTransmit,
+    UartReceive,
+    IisLrSelect,
+    IisClock,
+    IisSerialDataInput,
+    IisSerialDataOutput,
+    CodecClock
+);

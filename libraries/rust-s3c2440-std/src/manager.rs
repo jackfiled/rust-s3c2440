@@ -33,18 +33,18 @@ impl Manager {
     pub fn initialize(configuration: InitializeConfiguration) {
         let uart_controller = match configuration.uart_port {
             0 => S3C2440UartControllerBuilder::uart_controller0(
-                PortHPin2::init().into_uart_transmit(),
-                PortHPin3::init().into_uart_receive(),
+                PortHPin2::new().into_uart_transmit(),
+                PortHPin3::new().into_uart_receive(),
             )
             .initialize(PCLK, configuration.uart_buad_rate),
             1 => S3C2440UartControllerBuilder::uart_controller1(
-                PortHPin4::init().into_uart_transmit(),
-                PortHPin5::init().into_uart_receive(),
+                PortHPin4::new().into_uart_transmit(),
+                PortHPin5::new().into_uart_receive(),
             )
             .initialize(PCLK, configuration.uart_buad_rate),
             2 => S3C2440UartControllerBuilder::uart_controller2(
-                PortHPin6::init().into_uart_transmit(),
-                PortHPin7::init().into_uart_receive(),
+                PortHPin6::new().into_uart_transmit(),
+                PortHPin7::new().into_uart_receive(),
             )
             .initialize(PCLK, configuration.uart_buad_rate),
             _ => unreachable!(),

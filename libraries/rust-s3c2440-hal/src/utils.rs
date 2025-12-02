@@ -69,6 +69,11 @@ impl Register {
         let result = self.read() & (1 << offset);
         result != 0
     }
+
+    #[inline]
+    pub fn address(&self) -> usize {
+        self.0.get() as usize
+    }
 }
 
 /// A global variable container with initialize-once guaranteed.
