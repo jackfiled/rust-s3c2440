@@ -43,11 +43,11 @@ impl<F: PinFunction> PortAPin<F> {
         GPIOCONTROLLER
             .port_a()
             .control_register
-            .set_bit(0, self.pin);
+            .set_bit(0, self.pin, 1);
         GPIOCONTROLLER
             .port_a()
             .pull_up_register
-            .set_bit(1, self.pin);
+            .set_bit(1, self.pin, 1);
         PortAPin {
             pin: self.pin,
             _p: PhantomData,
@@ -69,12 +69,18 @@ impl<F: PinFunction> ErrorType for PortAPin<F> {
 
 impl<T: OutputState> OutputPin for PortAPin<Output<T>> {
     fn set_low(&mut self) -> Result<(), Self::Error> {
-        GPIOCONTROLLER.port_a().data_register.set_bit(0, self.pin);
+        GPIOCONTROLLER
+            .port_a()
+            .data_register
+            .set_bit(0, self.pin, 1);
         Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
-        GPIOCONTROLLER.port_a().data_register.set_bit(1, self.pin);
+        GPIOCONTROLLER
+            .port_a()
+            .data_register
+            .set_bit(1, self.pin, 1);
         Ok(())
     }
 }
@@ -90,11 +96,11 @@ seq!(N in 0..=22 {
             GPIOCONTROLLER
                 .port_a()
                 .control_register
-                .set_bit(0, N);
+                .set_bit(0, N, 1);
             GPIOCONTROLLER
                 .port_a()
                 .pull_up_register
-                .set_bit(1, N);
+                .set_bit(1, N, 1);
             PortAPin~N { _p: PhantomData }
         }
 
@@ -115,23 +121,23 @@ seq!(N in 0..=22 {
             GPIOCONTROLLER
                 .port_a()
                 .control_register
-                .set_bit(0, N);
+                .set_bit(0, N, 1);
             GPIOCONTROLLER
                 .port_a()
                 .pull_up_register
-                .set_bit(1, N);
+                .set_bit(1, N, 1);
             Self { _p: PhantomData }
         }
     }
 
     impl<T: OutputState> OutputPin for PortAPin~N<Output<T>> {
         fn set_low(&mut self) -> Result<(), Self::Error> {
-            GPIOCONTROLLER.port_a().data_register.set_bit(0, N);
+            GPIOCONTROLLER.port_a().data_register.set_bit(0, N, 1);
             Ok(())
         }
 
         fn set_high(&mut self) -> Result<(), Self::Error> {
-            GPIOCONTROLLER.port_a().data_register.set_bit(1, N);
+            GPIOCONTROLLER.port_a().data_register.set_bit(1, N, 1);
             Ok(())
         }
     }
@@ -159,11 +165,11 @@ macro_rules! impl_port_pin {
                     GPIOCONTROLLER
                         .[<port_ $lower_port_name>]()
                         .control_register
-                        .clear_bit(self.pin * 2, 2);
+                        .set_bit(0, self.pin * 2, 2);
                     GPIOCONTROLLER
                         .[<port_ $lower_port_name>]()
                         .pull_up_register
-                        .set_bit(S::pull_up_enable(), self.pin);
+                        .set_bit(S::pull_up_enable(), self.pin, 1);
 
                     [<Port $port_name Pin>] {
                         pin: self.pin,
@@ -175,11 +181,11 @@ macro_rules! impl_port_pin {
                     GPIOCONTROLLER
                         .[<port_ $lower_port_name>]()
                         .control_register
-                        .set_bit(1, self.pin * 2);
+                        .set_bit(1, self.pin * 2, 2);
                     GPIOCONTROLLER
                         .[<port_ $lower_port_name>]()
                         .pull_up_register
-                        .set_bit(1, self.pin);
+                        .set_bit(1, self.pin, 2);
 
                     [<Port $port_name Pin>] {
                         pin: self.pin,
@@ -212,12 +218,12 @@ macro_rules! impl_port_pin {
 
             impl OutputPin for [<Port $port_name Pin>]<Output<PushPull>> {
                 fn set_low(&mut self) -> Result<(), Self::Error> {
-                    GPIOCONTROLLER.[<port_ $lower_port_name>]().data_register.set_bit(1, self.pin);
+                    GPIOCONTROLLER.[<port_ $lower_port_name>]().data_register.set_bit(1, self.pin, 1);
                     Ok(())
                 }
 
                 fn set_high(&mut self) -> Result<(), Self::Error> {
-                    GPIOCONTROLLER.[<port_ $lower_port_name>]().data_register.clear_bit(self.pin, 1);
+                    GPIOCONTROLLER.[<port_ $lower_port_name>]().data_register.set_bit(0, self.pin, 1);
                     Ok(())
                 }
             }
@@ -232,11 +238,11 @@ macro_rules! impl_port_pin {
                          GPIOCONTROLLER
                              .[<port_ $lower_port_name>]()
                              .control_register
-                             .clear_bit(N * 2, 2);
+                             .set_bit(0, N * 2, 2);
                          GPIOCONTROLLER
                              .[<port_ $lower_port_name>]()
                              .pull_up_register
-                             .set_bit(S::pull_up_enable(), N);
+                             .set_bit(S::pull_up_enable(), N, 1);
 
                          [<Port $port_name Pin>]~N {
                              _p: PhantomData,
@@ -247,11 +253,11 @@ macro_rules! impl_port_pin {
                         GPIOCONTROLLER
                             .[<port_ $lower_port_name>]()
                             .control_register
-                            .set_bit(1, N * 2);
+                            .set_bit(1, N * 2, 2);
                         GPIOCONTROLLER
                             .[<port_ $lower_port_name>]()
                             .pull_up_register
-                            .set_bit(1, N);
+                            .set_bit(1, N, 1);
 
                         [<Port $port_name Pin>]~N {
                             _p: PhantomData
@@ -293,7 +299,7 @@ macro_rules! impl_port_pin {
                 impl OutputPin for [<Port $port_name Pin>]~N<Output<PushPull>> {
                     fn set_high(&mut self) -> Result<(), Self::Error> {
                         GPIOCONTROLLER.[<port_ $lower_port_name>]()
-                        .data_register.set_bit(1, N);
+                        .data_register.set_bit(1, N, 1);
 
                         Ok(())
                     }
@@ -301,7 +307,7 @@ macro_rules! impl_port_pin {
                     fn set_low(&mut self) -> Result<(), Self::Error> {
                         GPIOCONTROLLER
                             .[<port_ $lower_port_name>]()
-                            .data_register.set_bit(0, N);
+                            .data_register.set_bit(0, N, 1);
                         Ok(())
                     }
                 }
@@ -320,8 +326,8 @@ impl_port_pin!(E, e, 15);
 
 impl<F: PinFunction> PortEPin0<F> {
     pub fn into_iis_select(self) -> PortEPin0<IisLrSelect> {
-        GPIOCONTROLLER.port_e().control_register.set_bit(2, 0);
-        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 0);
+        GPIOCONTROLLER.port_e().control_register.set_bit(2, 0, 2);
+        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 0, 1);
 
         PortEPin0 { _p: PhantomData }
     }
@@ -329,8 +335,8 @@ impl<F: PinFunction> PortEPin0<F> {
 
 impl<F: PinFunction> PortEPin1<F> {
     pub fn into_iis_clock(self) -> PortEPin1<IisClock> {
-        GPIOCONTROLLER.port_e().control_register.set_bit(2, 2);
-        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 1);
+        GPIOCONTROLLER.port_e().control_register.set_bit(2, 2, 2);
+        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 1, 1);
 
         PortEPin1 { _p: PhantomData }
     }
@@ -338,8 +344,8 @@ impl<F: PinFunction> PortEPin1<F> {
 
 impl<F: PinFunction> PortEPin2<F> {
     pub fn into_iis_codec_clock(self) -> PortEPin2<CodecClock> {
-        GPIOCONTROLLER.port_e().control_register.set_bit(2, 4);
-        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 2);
+        GPIOCONTROLLER.port_e().control_register.set_bit(2, 4, 2);
+        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 2, 1);
 
         PortEPin2 { _p: PhantomData }
     }
@@ -347,8 +353,8 @@ impl<F: PinFunction> PortEPin2<F> {
 
 impl<F: PinFunction> PortEPin3<F> {
     pub fn into_iis_input(self) -> PortEPin3<IisSerialDataInput> {
-        GPIOCONTROLLER.port_e().control_register.set_bit(2, 6);
-        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 3);
+        GPIOCONTROLLER.port_e().control_register.set_bit(2, 6, 2);
+        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 3, 1);
 
         PortEPin3 { _p: PhantomData }
     }
@@ -356,8 +362,8 @@ impl<F: PinFunction> PortEPin3<F> {
 
 impl<F: PinFunction> PortEPin4<F> {
     pub fn into_iis_output(self) -> PortEPin4<IisSerialDataOutput> {
-        GPIOCONTROLLER.port_e().control_register.set_bit(2, 8);
-        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 4);
+        GPIOCONTROLLER.port_e().control_register.set_bit(2, 8, 2);
+        GPIOCONTROLLER.port_e().pull_up_register.set_bit(1, 4, 1);
 
         PortEPin4 { _p: PhantomData }
     }
@@ -371,48 +377,66 @@ impl_port_pin!(H, h, 10);
 
 impl<F: PinFunction> PortHPin2<F> {
     pub fn into_uart_transmit(self) -> PortHPin2<UartTransmit> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 2);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 2);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 2, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 2, 1);
         PortHPin2 { _p: PhantomData }
     }
 }
 
 impl<F: PinFunction> PortHPin3<F> {
     pub fn into_uart_receive(self) -> PortHPin3<UartReceive> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 3);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 3);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 3, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 3, 1);
         PortHPin3 { _p: PhantomData }
     }
 }
 
 impl<F: PinFunction> PortHPin4<F> {
     pub fn into_uart_transmit(self) -> PortHPin4<UartTransmit> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 4);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 4);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 4, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 4, 1);
         PortHPin4 { _p: PhantomData }
     }
 }
 
 impl<F: PinFunction> PortHPin5<F> {
     pub fn into_uart_receive(self) -> PortHPin5<UartReceive> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 5);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 5);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 5, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 5, 1);
         PortHPin5 { _p: PhantomData }
     }
 }
 
 impl<F: PinFunction> PortHPin6<F> {
     pub fn into_uart_transmit(self) -> PortHPin6<UartTransmit> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 6);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 6);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 6, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 6, 1);
         PortHPin6 { _p: PhantomData }
     }
 }
 
 impl<F: PinFunction> PortHPin7<F> {
     pub fn into_uart_receive(self) -> PortHPin7<UartReceive> {
-        GPIOCONTROLLER.port_h().control_register.set_bit(2, 2 * 7);
-        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 7);
+        GPIOCONTROLLER
+            .port_h()
+            .control_register
+            .set_bit(2, 2 * 7, 2);
+        GPIOCONTROLLER.port_h().pull_up_register.set_bit(1, 7, 1);
         PortHPin7 { _p: PhantomData }
     }
 }

@@ -21,13 +21,13 @@ pub struct NandFlashControllerInner {
 
 impl NandFlashControllerInner {
     fn select(&self) -> NandFlashSelectGuard<'_> {
-        self.control_register.set_bit(0, 1);
+        self.control_register.set_bit(0, 1, 1);
         NandFlashSelectGuard { inner: self }
     }
 
     #[inline]
     fn clear_signal(&self) {
-        self.status_register.set_bit(1, 2);
+        self.status_register.set_bit(1, 2, 1);
     }
 
     #[inline]
@@ -144,7 +144,7 @@ pub struct NandFlashSelectGuard<'a> {
 
 impl Drop for NandFlashSelectGuard<'_> {
     fn drop(&mut self) {
-        self.inner.control_register.set_bit(1, 1);
+        self.inner.control_register.set_bit(1, 1, 1);
     }
 }
 

@@ -44,24 +44,18 @@ impl Register {
     }
 
     #[inline]
-    pub fn set_bit(&self, value: u32, offset: u32) {
+    pub fn set_bit(&self, value: u32, offset: u32, width: u32) {
         let origin = self.read();
 
-        // The 0 will be handled specially.
-        if value == 0 {
-            let mask = 1 << offset;
-            self.write(origin & !mask);
-            return;
+        // Remove the target bits with a mask.
+        let mask = (1u32 << width - 1) << offset;
+        let mut result = origin & !mask;
+
+        if value != 0 {
+            result |= (value << offset) & mask;
         }
 
-        self.write(origin | (value << offset));
-    }
-
-    #[inline]
-    pub fn clear_bit(&self, offset: u32, width: u32) {
-        let mask = ((1 << width) - 1) << offset;
-        let origin = self.read();
-        self.write(origin & !mask);
+        self.write(result);
     }
 
     #[inline]
@@ -140,9 +134,9 @@ mod tests {
         let register = Register(UnsafeCell::new(0));
 
         assert_eq!(0, register.read());
-        register.set_bit(1, 0);
+        register.set_bit(1, 0, 1);
         assert_eq!(1, register.read());
-        register.set_bit(1, 1);
+        register.set_bit(1, 1, 1);
         assert_eq!(3, register.read());
     }
 
@@ -151,15 +145,27 @@ mod tests {
         let register = Register(UnsafeCell::new(0));
 
         assert_eq!(0, register.read());
-        register.set_bit(1, 1);
+        register.set_bit(1, 1, 1);
         assert_eq!(2, register.read());
-        register.set_bit(0, 1);
+        register.set_bit(0, 1, 1);
         assert_eq!(0, register.read());
 
         register.write(1);
         assert_eq!(1, register.read());
-        register.set_bit(1, 1);
-        register.set_bit(0, 1);
+        register.set_bit(1, 1, 1);
+        register.set_bit(0, 1, 1);
         assert_eq!(1, register.read());
+    }
+
+    #[test]
+    pub fn uart_register_set_test() {
+        let register = Register(UnsafeCell::new(0));
+
+        assert_eq!(0, register.read());
+
+        register.set_bit(2, 2 * 2, 2);
+        register.set_bit(2, 2 * 3, 2);
+
+        assert_eq!(0b10100000, register.read());
     }
 }

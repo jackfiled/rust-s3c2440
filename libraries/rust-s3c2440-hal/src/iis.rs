@@ -167,15 +167,15 @@ pub struct IisHandler<'a> {
 impl IisHandler<'_> {
     pub fn start(&self) {
         if self.enable_send {
-            self.controller.fifo_control_register.set_bit(1, 13);
+            self.controller.fifo_control_register.set_bit(1, 13, 1);
         }
 
         if self.enable_receive {
-            self.controller.fifo_control_register.set_bit(1, 12);
+            self.controller.fifo_control_register.set_bit(1, 12, 1);
         }
 
         // Enable IIS controller.
-        self.controller.control_register.set_bit(1, 0);
+        self.controller.control_register.set_bit(1, 0, 1);
     }
 
     pub fn end(&self) {
@@ -253,11 +253,11 @@ impl IisController {
 
         // Enable DMA mode for sending and receiving.
         if config.enable_send {
-            self.fifo_control_register.set_bit(1, 15);
+            self.fifo_control_register.set_bit(1, 15, 1);
         }
 
         if config.enable_receive {
-            self.fifo_control_register.set_bit(1, 14);
+            self.fifo_control_register.set_bit(1, 14, 1);
         }
 
         IisHandler {
