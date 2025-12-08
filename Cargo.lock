@@ -23,6 +23,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "interrupt-test"
+version = "0.1.0"
+dependencies = [
+ "rust-s3c2440-hal",
+ "rust-s3c2440-std",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

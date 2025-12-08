@@ -9,6 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/rust-s3c2440-macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/rust-s3c2440-hal/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/rust-s3c2440-std/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/applications/interrupt-test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

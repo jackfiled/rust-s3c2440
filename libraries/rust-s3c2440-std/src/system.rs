@@ -3,11 +3,14 @@
 #![allow(dead_code)]
 
 use bitflags::bitflags;
+use core::arch::asm;
+use rust_s3c2440_hal::s3c2440::CpuMode;
 use seq_macro::seq;
 
 pub mod clock;
+pub mod interrupt;
+mod stack;
 mod start;
-mod trap_stack;
 
 pub const LOCAL_MEMORY_ADDRESS: usize = 0x3000_0000;
 pub const LOCAL_MEMORY_BUS_ADDRESS: usize = LOCAL_MEMORY_ADDRESS;
@@ -124,10 +127,10 @@ bitflags! {
     /// Boot mode of S3C2440.
     #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
     pub struct BootMode: u32 {
-        const NORMAL = 0x00;
-        const NO_AUTO = 0x01;
-        const CLEAR = 0x02;
-        const QUICK_AUTO = 0x04;
+        const NORMAL = 0b000;
+        const NO_AUTO = 0b001;
+        const CLEAR = 0b010;
+        const QUICK_AUTO = 0b100;
     }
 }
 
@@ -139,3 +142,71 @@ pub const FCLK: u32 = 210_000_000;
 pub const HCLK: u32 = 105_000_000;
 /// PCLK = 52.5MHz.
 pub const PCLK: u32 = 52_500_000;
+
+/// Trigger a software interrupt(SWI).
+/// This function must be inlined otherwise the returning address will be the `mov pc, lr`.
+/// And under the interrupt handled the original lr register will be polluted when the software
+/// interrupt is triggered under SVC mode as the handled mode is also SVC.
+#[inline(always)]
+pub fn software_interrupt() {
+    unsafe {
+        asm!("swi 114514");
+    }
+}
+
+/// The CPSR(current program status register) abstraction.
+#[repr(transparent)]
+pub struct StatusRegister(u32);
+
+pub fn read_cpsr() -> StatusRegister {
+    let result: u32;
+
+    unsafe {
+        asm!(
+            "mrs {}, cpsr",
+            out(reg) result,
+        )
+    }
+
+    StatusRegister(result)
+}
+
+impl StatusRegister {
+    pub fn cpu_mode(&self) -> CpuMode {
+        CpuMode::from(self.0 & 0x1f)
+    }
+
+    pub fn write_cpsr(&self) {
+        unsafe {
+            asm!(
+                "msr cpsr, {}",
+                in(reg) self.0
+            )
+        }
+    }
+
+    #[inline]
+    pub fn set_mode(&mut self, mode: CpuMode) {
+        self.0 |= 0x1f & mode as u32
+    }
+
+    #[inline]
+    pub fn enable_interrupt(&mut self) {
+        self.0 &= !(1 << 7);
+    }
+
+    #[inline]
+    pub fn disable_interrupt(&mut self) {
+        self.0 |= 1 << 7;
+    }
+
+    #[inline]
+    pub fn enable_fast_interrupt(&mut self) {
+        self.0 &= !(1 << 6);
+    }
+
+    #[inline]
+    pub fn disable_fast_interrupt(&mut self) {
+        self.0 |= 1 << 6;
+    }
+}

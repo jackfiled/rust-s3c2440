@@ -158,8 +158,8 @@ unsafe extern "C" fn start() -> ! {
         BANKSIZE_INITIAL_VALUE = const crate::system::BANKSIZE_INITIAL_VALUE,
         MRSRB6_ADDRESS = const crate::system::MRSRB6_ADDRESS,
         MRSRB6_INITIAL_VALUE = const crate::system::MRSRB6_INITIAL_VALUE,
-        STACK = sym crate::system::trap_stack::ROOT_STACK,
-        STACK_SIZE = const crate::system::trap_stack::STACK_SIZE,
+        STACK = sym crate::system::stack::ROOT_STACK,
+        STACK_SIZE = const crate::system::stack::STACK_SIZE,
         NORMAL_BOOT = const crate::system::BootMode::NORMAL.bits(),
         MAIN_FUNC = sym crate::rust_main
     )

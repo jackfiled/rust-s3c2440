@@ -7,8 +7,10 @@ mod clock;
 mod dma;
 pub mod gpio;
 mod iis;
+pub mod interrupt;
 mod l3bus;
 pub mod nand;
+pub mod s3c2440;
 pub mod uart;
 mod utils;
 

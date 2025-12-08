@@ -10,3 +10,6 @@ impl Stack {
 
 #[unsafe(link_section = ".bss.stack")]
 pub(crate) static mut ROOT_STACK: Stack = Stack::ZERO;
+
+#[unsafe(link_section = ".bss.stack")]
+pub(crate) static mut TRAP_STACK: Stack = Stack::ZERO;
