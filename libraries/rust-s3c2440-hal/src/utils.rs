@@ -2,7 +2,7 @@ use core::cell::UnsafeCell;
 use core::ptr;
 
 #[repr(transparent)]
-pub(crate) struct Register(UnsafeCell<u32>);
+pub struct Register(UnsafeCell<u32>);
 
 impl Register {
     /// Read the register.

@@ -1,22 +1,21 @@
 use crate::system::{StatusRegister, read_cpsr};
-use crate::{MANAGER, debug, println};
-use core::arch::{asm, naked_asm};
-use core::cell::UnsafeCell;
+use crate::{MANAGER, debug};
+use core::arch::naked_asm;
 use core::ops::{Deref, DerefMut};
 use rust_s3c2440_hal::interrupt::{InterruptController, InterruptSource};
-use rust_s3c2440_hal::s3c2440::CpuMode;
+use rust_s3c2440_hal::utils::Register;
 
 const INTERRUPT_VECTOR_BASE_ADDRESS: usize = 0x3000_0100;
 
 #[repr(C)]
 struct InterruptVector {
-    undefined_exception_handler: UnsafeCell<usize>,
-    software_interrupt_handler: UnsafeCell<usize>,
-    prefetch_abort_handler: UnsafeCell<usize>,
-    data_abort_handler: UnsafeCell<usize>,
-    _reserved: UnsafeCell<usize>,
-    interrupt_handler: UnsafeCell<usize>,
-    fast_interrupt_handler: UnsafeCell<usize>,
+    undefined_exception_handler: Register,
+    software_interrupt_handler: Register,
+    prefetch_abort_handler: Register,
+    data_abort_handler: Register,
+    _reserved: Register,
+    interrupt_handler: Register,
+    fast_interrupt_handler: Register,
 }
 
 pub struct InterruptManager {
@@ -55,6 +54,7 @@ extern "C" fn set_interrupt_stack() {
         "bic r0, r0, {MODE_MASK}",
         "orr r0, r0, {SVC_MODE}",
         "msr cpsr, r0",
+        "bx lr",
         MODE_MASK = const rust_s3c2440_hal::s3c2440::CpuMode::MASK,
         IRQ_MODE = const rust_s3c2440_hal::s3c2440::CpuMode::Interrupt as u32,
         IRQ_STACK = sym crate::system::stack::TRAP_STACK,
@@ -74,22 +74,18 @@ impl InterruptManager {
 
     pub fn enable_interrupt(&mut self) {
         // 1. Set the interrupt vector.
-        unsafe {
-            self.vector()
-                .software_interrupt_handler
-                .get()
-                .write(software_interrupt_entry as *const () as usize);
-            self.vector()
-                .interrupt_handler
-                .get()
-                .write(interrupt_entry as *const () as usize)
-        }
+        self.vector()
+            .software_interrupt_handler
+            .write(software_interrupt_entry as *const () as u32);
+        self.vector()
+            .interrupt_handler
+            .write(interrupt_entry as *const () as u32);
 
-        let mut cpsr = read_cpsr();
         // 2. Set the stack point for each mode.
         set_interrupt_stack();
 
         // 3. Turn on the interrupt.
+        let mut cpsr = read_cpsr();
         cpsr.enable_interrupt();
         cpsr.write_cpsr();
     }

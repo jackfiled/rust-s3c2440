@@ -1,6 +1,5 @@
 use crate::utils::Register;
 use core::fmt;
-use core::fmt::write;
 use core::ops::Deref;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]

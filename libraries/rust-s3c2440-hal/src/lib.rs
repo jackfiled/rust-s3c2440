@@ -12,7 +12,7 @@ mod l3bus;
 pub mod nand;
 pub mod s3c2440;
 pub mod uart;
-mod utils;
+pub mod utils;
 
 pub use utils::Global;
 
