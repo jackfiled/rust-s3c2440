@@ -1,4 +1,9 @@
 use crate::clock::{ClockController, ClockStatus};
+use crate::gpio::{
+    CodecClock, IisClock, IisLrSelect, IisSerialDataInput, IisSerialDataOutput, PortEPin0,
+    PortEPin1, PortEPin2, PortEPin3, PortEPin4,
+};
+use crate::nop;
 use crate::utils::Register;
 use core::ops::Deref;
 
@@ -101,6 +106,7 @@ pub struct IisConfig {
     samples_per_second: u32,
     enable_send: bool,
     enable_receive: bool,
+    enable_dma: bool,
 }
 
 impl IisConfig {
@@ -109,12 +115,14 @@ impl IisConfig {
         samples_per_second: u32,
         enable_send: bool,
         enable_receive: bool,
+        enable_dma: bool,
     ) -> Self {
         Self {
             bits_per_sample,
             samples_per_second,
             enable_send,
             enable_receive,
+            enable_dma,
         }
     }
 
@@ -122,7 +130,7 @@ impl IisConfig {
     /// PCLK factor to obtain a frequency closest to the requesting one.
     /// As the document show, the frequency will be PCLK / (r + 1) / N.
     /// Then N can be 256 or 384.
-    fn select_codec_clock_and_prescaler(&self, clock: u32) -> (CodecClockKind, u32) {
+    pub fn select_codec_clock_and_prescaler(&self, clock: u32) -> (CodecClockKind, u32) {
         let divider_256 = self.calculate_clock_and_prescaler(clock, CodecClockKind::FS256);
         let difference_256 = self
             .samples_per_second
@@ -162,20 +170,47 @@ pub struct IisHandler<'a> {
     controller: &'a IisController,
     enable_send: bool,
     enable_receive: bool,
+    enable_dma: bool,
 }
 
 impl IisHandler<'_> {
     pub fn start(&self) {
+        let mut fifo_control_value = 0;
+
+        if self.enable_dma {
+            if self.enable_send {
+                fifo_control_value |= 1 << 15;
+            }
+
+            if self.enable_receive {
+                fifo_control_value |= 1 << 14;
+            }
+        }
+
         if self.enable_send {
-            self.controller.fifo_control_register.set_bit(1, 13, 1);
+            fifo_control_value |= 1 << 13;
         }
 
         if self.enable_receive {
-            self.controller.fifo_control_register.set_bit(1, 12, 1);
+            fifo_control_value |= 1 << 12;
         }
 
+        // Configure the FIFO control register.
+        self.controller
+            .fifo_control_register
+            .write(fifo_control_value);
         // Enable IIS controller.
         self.controller.control_register.set_bit(1, 0, 1);
+    }
+
+    pub fn wait_for_send(&self) {
+        if !self.enable_send {
+            panic!("IIS sending is not enabled.");
+        }
+
+        while self.controller.control_register.is_bit_one(7) {
+            nop();
+        }
     }
 
     pub fn end(&self) {
@@ -188,8 +223,21 @@ impl IisHandler<'_> {
     }
 
     #[inline]
-    pub fn fifo_address(&self) -> usize {
-        self.controller.fifo_data_register.address()
+    pub fn fifo_register(&self) -> &Register {
+        &self.controller.fifo_data_register
+    }
+
+    pub fn send_buffer_len(&self) -> u32 {
+        let value = self.controller.fifo_control_register.read();
+        (value >> 6) & 0x3f
+    }
+
+    pub fn read_control_register(&self) -> u32 {
+        self.controller.control_register.read()
+    }
+
+    pub fn read_fifo_control_register(&self) -> u32 {
+        self.controller.fifo_control_register.read()
     }
 }
 
@@ -207,7 +255,14 @@ impl Deref for IisController {
 }
 
 impl IisController {
-    pub fn new(clock_controller: ClockController) -> Self {
+    pub fn new(
+        clock_controller: ClockController,
+        _: PortEPin0<IisLrSelect>,
+        _: PortEPin1<IisClock>,
+        _: PortEPin2<CodecClock>,
+        _: PortEPin3<IisSerialDataInput>,
+        _: PortEPin4<IisSerialDataOutput>,
+    ) -> Self {
         Self {
             inner: IIS_CONTROLLER_REGISTER as *const IisControllerInner,
             clock_controller,
@@ -221,50 +276,50 @@ impl IisController {
         let (kind, divider) = config.select_codec_clock_and_prescaler(clock);
         self.pre_scaler_register.write(divider << 5 | divider);
 
-        let iis_mode = (0 << 10) // Use PCLK as input clock.
-            | (0 << 8) // Master mode.
-            | match (config.enable_send, config.enable_receive) {
-                (true, true) => 3 << 6,
-                (true, false) => 2 << 6,
-                (false, true) => 1 << 6,
-                _ => 0
-            } // Send or receive mode.
-            | 0 << 5 // Master mode.
-            | 1 << 4 // MSB format.
-            | match config.bits_per_sample {
-                8 => 0 << 3,
-                16 => 1 << 3,
-                _ => unreachable!()
-            } // Bits pre samples.
-            | match kind {
-                CodecClockKind::FS256 => 0 << 2,
-                CodecClockKind::FS384 => 1 << 2
-            }
-            | 1; // Use 32fs as the serial clock as which is most compatible.
-        self.mode_register.write(iis_mode);
-
-        let control_mode = 0
-            | if config.enable_send { 1 << 5 } else { 0 }
-            | if config.enable_receive { 1 << 4 } else { 0 }
+        let mut control_mode = 0
             | if !config.enable_send { 1 << 3 } else { 0 }
             | if !config.enable_receive { 1 << 2 } else { 0 }
             | 1 << 1; // Enable prescaler.
+
+        if config.enable_dma {
+            control_mode |= if config.enable_send { 1 << 5 } else { 0 }
+                | if config.enable_receive { 1 << 4 } else { 0 };
+        }
         self.control_register.write(control_mode);
 
-        // Enable DMA mode for sending and receiving.
-        if config.enable_send {
-            self.fifo_control_register.set_bit(1, 15, 1);
+        let iis_mode = (0 << 10) // Use PCLK as input clock.
+            | (0 << 8) // Master mode.
+            | match (config.enable_send, config.enable_receive) {
+            (true, true) => 3 << 6,
+            (true, false) => 2 << 6,
+            (false, true) => 1 << 6,
+            _ => 0
+        } // Send or receive mode.
+            | 0 << 5 // Master mode.
+            | 0 << 4 // IIS format.
+            | match config.bits_per_sample {
+            8 => 0 << 3,
+            16 => 1 << 3,
+            _ => unreachable!()
+        } // Bits pre samples.
+            | match kind {
+            CodecClockKind::FS256 => 0 << 2,
+            CodecClockKind::FS384 => 1 << 2
         }
-
-        if config.enable_receive {
-            self.fifo_control_register.set_bit(1, 14, 1);
-        }
+            | 1; // Use 32fs as the serial clock as which is most compatible.
+        self.mode_register.write(iis_mode);
 
         IisHandler {
             controller: self,
+            enable_dma: config.enable_dma,
             enable_send: config.enable_send,
             enable_receive: config.enable_receive,
         }
+    }
+
+    #[inline]
+    pub fn fifo_address(&self) -> usize {
+        self.fifo_data_register.address()
     }
 }
 
@@ -287,6 +342,7 @@ mod tests {
             samples_per_second: 8000,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         // Not the same as the referred code, which is 23/FS256.
@@ -300,6 +356,7 @@ mod tests {
             bits_per_sample: 8,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(
@@ -315,6 +372,7 @@ mod tests {
             samples_per_second: 8000,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(
@@ -327,6 +385,7 @@ mod tests {
             samples_per_second: 11025,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(
@@ -339,6 +398,7 @@ mod tests {
             samples_per_second: 16000,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(
@@ -351,6 +411,7 @@ mod tests {
             samples_per_second: 44100,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(
@@ -363,6 +424,7 @@ mod tests {
             samples_per_second: 48000,
             enable_send: true,
             enable_receive: false,
+            enable_dma: false,
         };
 
         assert_eq!(

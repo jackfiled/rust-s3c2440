@@ -3,7 +3,7 @@ use crate::support::console::S3C2440Console;
 use crate::support::{Log, LogLevel, set_logger};
 use crate::system::PCLK;
 use crate::system::interrupt::InterruptManager;
-use core::cell::RefCell;
+use core::cell::{RefCell, UnsafeCell};
 use core::fmt::Arguments;
 use rust_s3c2440_hal::Global;
 use rust_s3c2440_hal::gpio::{PortHPin2, PortHPin3, PortHPin4, PortHPin5, PortHPin6, PortHPin7};
@@ -27,7 +27,7 @@ impl Log for Logger {
 pub struct Manager {
     /// The UART controllers in S3C2440.
     uart_controller: S3C2440UartController,
-    console: RefCell<S3C2440Console>,
+    console: UnsafeCell<S3C2440Console>,
     interrupt_manager: RefCell<InterruptManager>,
 }
 
@@ -57,15 +57,15 @@ impl Manager {
 
         MANAGER.init(Manager {
             uart_controller,
-            console: RefCell::new(console),
+            console: UnsafeCell::new(console),
             interrupt_manager: RefCell::new(interrupt_manager),
         });
 
         set_logger(&Logger {}, configuration.log_level);
     }
 
-    pub fn console(&self) -> &RefCell<S3C2440Console> {
-        &self.console
+    pub fn console(&self) -> &mut S3C2440Console {
+        unsafe { &mut (*self.console.get()) }
     }
 
     pub fn interrupt(&self) -> &RefCell<InterruptManager> {

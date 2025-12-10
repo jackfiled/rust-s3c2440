@@ -8,8 +8,8 @@ impl Stack {
     const ZERO: Self = Self([0; STACK_SIZE]);
 }
 
-#[unsafe(link_section = ".bss.stack")]
+#[unsafe(link_section = ".bss.stack.svc")]
 pub(crate) static mut ROOT_STACK: Stack = Stack::ZERO;
 
-#[unsafe(link_section = ".bss.stack")]
+#[unsafe(link_section = ".bss.stack.trap")]
 pub(crate) static mut TRAP_STACK: Stack = Stack::ZERO;

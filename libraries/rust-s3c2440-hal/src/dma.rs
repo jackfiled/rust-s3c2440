@@ -101,19 +101,15 @@ pub enum DmaSize {
 }
 
 pub struct DmaConfig {
-    source_address: usize,
-    source_location: MemoryLocation,
-    source_auto_increment: bool,
-    target_address: usize,
-    target_location: MemoryLocation,
-    target_auto_increment: bool,
-    dma_mode: DmaMode,
-    enable_interrupt: bool,
-    enable_burst: bool,
-    serve_mode: DmaServeMode,
-    enable_reload: bool,
-    size: DmaSize,
-    count: u32,
+    pub source_location: MemoryLocation,
+    pub source_auto_increment: bool,
+    pub target_location: MemoryLocation,
+    pub target_auto_increment: bool,
+    pub dma_mode: DmaMode,
+    pub enable_interrupt: bool,
+    pub enable_burst: bool,
+    pub serve_mode: DmaServeMode,
+    pub enable_reload: bool,
 }
 
 impl DmaConfig {
@@ -125,15 +121,19 @@ impl DmaConfig {
         (self.target_location as u32) << 1 | (!self.target_auto_increment).value()
     }
 
-    fn control_value(&self) -> u32 {
+    fn control_value(&self, trigger_mode: &DmaTriggerMode, size: DmaSize, count: u32) -> u32 {
         (self.dma_mode as u32) << 31
             | (self.source_location == MemoryLocation::System).value() << 30
             | self.enable_interrupt.value() << 29
             | self.enable_burst.value() << 28
             | (self.serve_mode as u32) << 27
+            | match trigger_mode {
+                DmaTriggerMode::Hardware(m) => *m << 24 | 1 << 23,
+                DmaTriggerMode::Software => 0,
+            }
             | (!self.enable_reload).value() << 22
-            | (self.size as u32) << 20
-            | (self.count & 0xfffff)
+            | (size as u32) << 20
+            | (count & 0xfffff)
     }
 }
 
@@ -169,9 +169,18 @@ impl DmaHandler<'_> {
     }
 }
 
+impl Deref for DmaHandler<'_> {
+    type Target = DmaController;
+
+    fn deref(&self) -> &Self::Target {
+        &self.controller
+    }
+}
+
 pub struct DmaController {
     inner: *const DmaControllerInner,
     trigger_mode: DmaTriggerMode,
+    dma_config: DmaConfig,
 }
 
 impl Deref for DmaController {
@@ -183,23 +192,42 @@ impl Deref for DmaController {
 }
 
 impl DmaController {
-    pub fn request_channel0(function: DmaChannel0Function, config: &DmaConfig) -> DmaController {
+    pub fn request_channel0(function: DmaChannel0Function, config: DmaConfig) -> DmaController {
         Self::configure_channel(DmaTriggerMode::Hardware(function as u32), config, 0)
     }
 
-    pub fn request_channel1(function: DmaChannel1Function, config: &DmaConfig) -> DmaController {
+    pub fn request_channel1(function: DmaChannel1Function, config: DmaConfig) -> DmaController {
         Self::configure_channel(DmaTriggerMode::Hardware(function as u32), config, 1)
     }
 
-    pub fn request_channel2(function: DmaChannel2Function, config: &DmaConfig) -> DmaController {
+    pub fn request_channel2(function: DmaChannel2Function, config: DmaConfig) -> DmaController {
         Self::configure_channel(DmaTriggerMode::Hardware(function as u32), config, 2)
     }
 
-    pub fn request_channel3(function: DmaChannel3Function, config: &DmaConfig) -> DmaController {
+    pub fn request_channel3(function: DmaChannel3Function, config: DmaConfig) -> DmaController {
         Self::configure_channel(DmaTriggerMode::Hardware(function as u32), config, 3)
     }
 
-    pub fn start_dma(&mut self) -> DmaHandler<'_> {
+    pub fn start_dma(
+        &mut self,
+        source_address: usize,
+        target_address: usize,
+        dma_size: DmaSize,
+        count: u32,
+    ) -> DmaHandler<'_> {
+        self.control_register.write(self.dma_config.control_value(
+            &self.trigger_mode,
+            dma_size,
+            count,
+        ));
+        self.source_control_register
+            .write(self.dma_config.source_control_value());
+        self.target_control_register
+            .write(self.dma_config.target_control_value());
+
+        self.source_register.write(source_address as u32);
+        self.target_register.write(target_address as u32);
+
         let mask_value = match self.trigger_mode {
             DmaTriggerMode::Hardware(_) => 1 << 1,
             DmaTriggerMode::Software => 1 << 1 | 1,
@@ -209,32 +237,29 @@ impl DmaController {
         DmaHandler { controller: self }
     }
 
-    fn configure_channel(mode: DmaTriggerMode, config: &DmaConfig, id: usize) -> DmaController {
-        let control_value = config.control_value()
-            | match mode {
-                DmaTriggerMode::Hardware(m) => m << 24 | 1 << 23,
-                DmaTriggerMode::Software => 0,
-            };
+    pub fn is_busy(&self) -> bool {
+        self.status_register.is_bit_one(20)
+    }
 
+    pub fn current_count(&self) -> u32 {
+        self.status_register.read() & 0xfffff
+    }
+
+    pub fn current_source_address(&self) -> usize {
+        self.source_status_register.read() as usize
+    }
+
+    pub fn current_target_address(&self) -> usize {
+        self.target_status_register.read() as usize
+    }
+
+    fn configure_channel(mode: DmaTriggerMode, config: DmaConfig, id: usize) -> DmaController {
         let controller = DmaController {
             inner: (DMA_CONTROLLER_BASE_ADDRESS + DMA_CONTROLLER_OFFSET * id)
                 as *const DmaControllerInner,
             trigger_mode: mode,
+            dma_config: config,
         };
-
-        controller.control_register.write(control_value);
-        controller
-            .source_control_register
-            .write(config.source_control_value());
-        controller
-            .target_control_register
-            .write(config.target_control_value());
-        controller
-            .source_register
-            .write(config.source_address as u32);
-        controller
-            .target_register
-            .write(config.target_address as u32);
 
         controller
     }

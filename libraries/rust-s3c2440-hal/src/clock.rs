@@ -59,10 +59,22 @@ impl Deref for ClockController {
     }
 }
 
-unsafe impl Sync for ClockController {}
+impl ClockController {
+    pub fn new() -> Self {
+        Self {
+            inner: CLOCK_ADDRESS as *const ClockControllerInner,
+        }
+    }
+}
 
 const CLOCK_ADDRESS: usize = 0x4C00_000C;
 
-pub static CLOCK_CONTROLLER: ClockController = ClockController {
-    inner: CLOCK_ADDRESS as *const ClockControllerInner,
-};
+#[cfg(test)]
+mod tests {
+    use crate::clock::ClockStatus;
+
+    #[test]
+    fn clock_status_tests() {
+        assert_eq!(0x20000, ClockStatus::IIS.bits());
+    }
+}

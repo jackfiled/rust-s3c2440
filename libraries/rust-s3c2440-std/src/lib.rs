@@ -25,7 +25,7 @@ pub use rust_s3c2440_macros::entry;
 const CONFIGURATION: InitializeConfiguration = InitializeConfiguration {
     uart_port: 0,
     uart_buad_rate: 115200,
-    log_level: LogLevel::Info,
+    log_level: LogLevel::Debug,
 };
 
 /// Hook function will be called before entry function running.
@@ -35,6 +35,12 @@ pub fn init_board() {
 }
 
 #[panic_handler]
-pub fn panic_handler(_: &PanicInfo) -> ! {
+pub fn panic_handler(info: &PanicInfo) -> ! {
+    // The default formatter may print too long line, which breaks the UART?
+    error!("System panicked: {}", info.message());
+    if let Some(l) = info.location() {
+        error!("Location: {}", l);
+    }
+
     loop {}
 }

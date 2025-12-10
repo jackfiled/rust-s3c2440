@@ -4,8 +4,7 @@ macro_rules! print {
     ($($arg:tt)*) => {
         use core::fmt::Write;
         let console = unsafe { $crate::MANAGER.get_unchecked().console() };
-        console.borrow_mut().write_fmt(core::format_args!($($arg)*)).unwrap();
-        $crate::MANAGER.get_unchecked().console().write_fmt(core::format_args!($($arg)*)).unwrap();
+        console.write_fmt(core::format_args!($($arg)*)).unwrap();
     }
 }
 
@@ -16,7 +15,7 @@ macro_rules! println {
     ($($arg:tt)*) => {{
         use core::fmt::Write;
         let console = unsafe { $crate::MANAGER.get_unchecked().console() };
-        console.borrow_mut().write_fmt(core::format_args!($($arg)*)).unwrap();
-        console.borrow_mut().write_str("\r\n").unwrap();
+        console.write_fmt(core::format_args!($($arg)*)).unwrap();
+        console.write_str("\r\n").unwrap();
     }}
 }

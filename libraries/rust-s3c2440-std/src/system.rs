@@ -4,6 +4,7 @@
 
 use bitflags::bitflags;
 use core::arch::asm;
+use core::fmt::{Display, Formatter};
 use rust_s3c2440_hal::s3c2440::CpuMode;
 use seq_macro::seq;
 
@@ -156,6 +157,7 @@ pub fn software_interrupt() {
 
 /// The CPSR(current program status register) abstraction.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct StatusRegister(u32);
 
 pub fn read_cpsr() -> StatusRegister {
@@ -165,6 +167,19 @@ pub fn read_cpsr() -> StatusRegister {
         asm!(
             "mrs {}, cpsr",
             out(reg) result,
+        )
+    }
+
+    StatusRegister(result)
+}
+
+pub fn read_spsr() -> StatusRegister {
+    let result: u32;
+
+    unsafe {
+        asm!(
+        "mrs {}, spsr",
+        out(reg) result,
         )
     }
 
@@ -186,11 +201,6 @@ impl StatusRegister {
     }
 
     #[inline]
-    pub fn set_mode(&mut self, mode: CpuMode) {
-        self.0 |= 0x1f & mode as u32
-    }
-
-    #[inline]
     pub fn enable_interrupt(&mut self) {
         self.0 &= !(1 << 7);
     }
@@ -201,6 +211,11 @@ impl StatusRegister {
     }
 
     #[inline]
+    pub fn interrupt_enabled(&self) -> bool {
+        ((self.0 >> 7) & 1) == 0
+    }
+
+    #[inline]
     pub fn enable_fast_interrupt(&mut self) {
         self.0 &= !(1 << 6);
     }
@@ -208,5 +223,30 @@ impl StatusRegister {
     #[inline]
     pub fn disable_fast_interrupt(&mut self) {
         self.0 |= 1 << 6;
+    }
+
+    #[inline]
+    pub fn fast_interrupt_enabled(&self) -> bool {
+        ((self.0 >> 6) & 1) == 0
+    }
+}
+
+impl Display for StatusRegister {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "CPU status: IRQ: {}, FIQ: {}, Mode: {}",
+            if self.interrupt_enabled() {
+                "Enabled"
+            } else {
+                "Disabled"
+            },
+            if self.fast_interrupt_enabled() {
+                "Enabled"
+            } else {
+                "Disabled"
+            },
+            self.cpu_mode()
+        )
     }
 }

@@ -13,7 +13,7 @@ pub enum CpuMode {
 }
 
 impl CpuMode {
-    pub const MASK: u32 = 0b00000;
+    pub const MASK: u32 = 0b11111;
 }
 
 impl From<u32> for CpuMode {
