@@ -1,6 +1,7 @@
 use crate::system::stack::STACK_SIZE;
 use crate::system::{StatusRegister, read_cpsr, read_spsr};
 use crate::{MANAGER, debug};
+use alloc::boxed::Box;
 use core::arch::{asm, naked_asm};
 use core::ops::{Deref, DerefMut};
 use rust_s3c2440_hal::interrupt::{InterruptController, InterruptSource};
@@ -22,7 +23,8 @@ struct InterruptVector {
 pub struct InterruptManager {
     vector: *const InterruptVector,
     controller: InterruptController,
-    interrupt_handlers: [fn() -> (); InterruptSource::INTERRUPT_SOURCE_COUNT],
+    software_interrupt_handler: Box<dyn Fn() -> ()>,
+    interrupt_handlers: [Box<dyn Fn() -> ()>; InterruptSource::INTERRUPT_SOURCE_COUNT],
 }
 
 impl Deref for InterruptManager {
@@ -84,7 +86,8 @@ impl InterruptManager {
         Self {
             vector: INTERRUPT_VECTOR_BASE_ADDRESS as *const InterruptVector,
             controller: InterruptController::new(),
-            interrupt_handlers: [|| {}; InterruptSource::INTERRUPT_SOURCE_COUNT],
+            software_interrupt_handler: Self::empty_handler(),
+            interrupt_handlers: core::array::from_fn(|_| Self::empty_handler()),
         }
     }
 
@@ -139,18 +142,39 @@ impl InterruptManager {
         debug!("Interrupt has been enabled.");
     }
 
-    pub fn interrupt_handler(&self, source: InterruptSource) -> fn() -> () {
-        self.interrupt_handlers[usize::from(source)]
+    pub fn interrupt_handler(&self, source: InterruptSource) -> &Box<dyn Fn() -> ()> {
+        &self.interrupt_handlers[usize::from(source)]
     }
 
-    pub fn register_interrupt_handler(&mut self, source: InterruptSource, handler: fn() -> ()) {
+    pub fn register_interrupt_handler(
+        &mut self,
+        source: InterruptSource,
+        handler: Box<dyn Fn() -> ()>,
+    ) {
         self.controller.enable_interrupt(source);
         self.interrupt_handlers[usize::from(source)] = handler;
+    }
+
+    pub fn unregister_interrupt_handler(&mut self, source: InterruptSource) {
+        self.controller.disable_interrupt(source);
+        self.interrupt_handlers[usize::from(source)] = Self::empty_handler();
+    }
+
+    pub fn register_software_interrupt_handler(&mut self, handler: Box<dyn Fn() -> ()>) {
+        self.software_interrupt_handler = handler;
+    }
+
+    pub fn unregister_software_interrupt_handler(&mut self) {
+        self.software_interrupt_handler = Self::empty_handler();
     }
 
     #[inline]
     fn vector(&self) -> &InterruptVector {
         unsafe { &(*self.vector) }
+    }
+
+    fn empty_handler() -> Box<dyn Fn() -> ()> {
+        Box::new(|| {})
     }
 }
 
@@ -214,6 +238,12 @@ fn software_interrupt_handler(context: &TrapContext) {
         "Software interrupt, returning PC is 0x{:X}",
         context.return_address()
     );
+
+    let manager = MANAGER.get().unwrap().interrupt();
+    let handler = &manager.borrow().software_interrupt_handler;
+    handler();
+
+    debug!("Software interrupt handled.");
 }
 
 #[unsafe(naked)]
@@ -260,7 +290,7 @@ fn interrupt_handler(context: &TrapContext) {
     let source = manager.borrow().read_handling();
     debug!("Encounter hardware interrupt: {}", source);
 
-    let handler = manager.borrow().interrupt_handlers[usize::from(source)];
+    let handler = &manager.borrow().interrupt_handlers[usize::from(source)];
     handler();
 
     // Clear the pending interrupt.

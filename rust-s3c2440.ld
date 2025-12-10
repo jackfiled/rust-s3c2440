@@ -18,7 +18,7 @@ SECTIONS {
   . = ALIGN(16);
   .bss : {
     rust_bss_start = .;
-    *(.sbss) *(.scommon) *(.dynbss) *(.bss) *(.bss.stack.*) *(COMMON)
+    *(.sbss) *(.scommon) *(.dynbss) *(.bss) *(.bss.stack.*) *(.bss.heap) *(COMMON)
     . = ALIGN(16);
     rust_bss_end = .;
   }

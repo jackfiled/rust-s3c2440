@@ -9,6 +9,7 @@ use rust_s3c2440_hal::s3c2440::CpuMode;
 use seq_macro::seq;
 
 pub mod clock;
+pub(super) mod heap;
 pub mod interrupt;
 mod stack;
 mod start;

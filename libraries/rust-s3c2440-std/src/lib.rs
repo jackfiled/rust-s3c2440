@@ -1,9 +1,13 @@
+#![feature(alloc_error_handler)]
 #![no_std]
 #![no_main]
 #![allow(dead_code)]
+#![allow(static_mut_refs)]
 
 use crate::manager::{InitializeConfiguration, Manager};
 use core::panic::PanicInfo;
+
+extern crate alloc;
 
 mod manager;
 pub mod support;

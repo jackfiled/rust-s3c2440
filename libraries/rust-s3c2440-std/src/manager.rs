@@ -1,8 +1,9 @@
-use crate::println;
 use crate::support::console::S3C2440Console;
 use crate::support::{Log, LogLevel, set_logger};
 use crate::system::PCLK;
+use crate::system::heap::initialize_heap;
 use crate::system::interrupt::InterruptManager;
+use crate::{info, println};
 use core::cell::{RefCell, UnsafeCell};
 use core::fmt::Arguments;
 use rust_s3c2440_hal::Global;
@@ -60,8 +61,10 @@ impl Manager {
             console: UnsafeCell::new(console),
             interrupt_manager: RefCell::new(interrupt_manager),
         });
-
         set_logger(&Logger {}, configuration.log_level);
+
+        initialize_heap();
+        info!("Heap initialized.");
     }
 
     pub fn console(&self) -> &mut S3C2440Console {
