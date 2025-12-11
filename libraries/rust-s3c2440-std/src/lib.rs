@@ -12,7 +12,7 @@ extern crate alloc;
 mod manager;
 pub mod support;
 pub mod system;
-mod utils;
+pub mod utils;
 
 pub use manager::MANAGER;
 

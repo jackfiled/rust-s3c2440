@@ -5,6 +5,8 @@ extern crate alloc;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::RefCell;
+use rust_s3c2440_std::system::software_interrupt;
+use rust_s3c2440_std::utils::debug::print_debug_info;
 use rust_s3c2440_std::{MANAGER, entry, println};
 
 #[entry]
@@ -23,13 +25,16 @@ fn main() -> ! {
             println!("count += 1");
         }));
 
+    print_debug_info();
     println!("Enabled interrupt.");
 
-    // println!("Try to trigger software interrupt...");
-    //
-    // software_interrupt();
-    //
-    // println!("Software interrupt is handled correctly!");
+    println!("Try to trigger software interrupt...");
+
+    software_interrupt();
+
+    println!("Software interrupt is handled correctly!");
+    print_debug_info();
+
     println!("The count is {}", count2.borrow());
 
     println!(

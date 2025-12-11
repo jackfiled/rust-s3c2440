@@ -214,7 +214,7 @@ unsafe extern "C" fn software_interrupt_entry() {
         "orr r0, r0, {I_BIT}",
         "msr cpsr, r0",
         // 2. Store the trap context.
-        "add r0, sp, 4",
+        "add r0, sp, #4",
         "stmia r0!, {{r1- r14}}",
         "mrs r1, spsr",
         "stmia r0!, {{r1}}",
@@ -224,7 +224,10 @@ unsafe extern "C" fn software_interrupt_entry() {
         "bl {TRAP_HANDLER}",
         // 4. Restore the environment.
         // The cpsr register will be restored with spsr.
+        // And the sp should be restored especially when handling software interrupt as the mode
+        // may be the same SVC mode.
         "ldmia sp!, {{r0- r14}}",
+        "add sp, #4",
         // 5. Call back to the PC.
         // When software interrupt, just go to PC +4.
         "movs pc, r14",
@@ -240,8 +243,7 @@ fn software_interrupt_handler(context: &TrapContext) {
     );
 
     let manager = MANAGER.get().unwrap().interrupt();
-    let handler = &manager.borrow().software_interrupt_handler;
-    handler();
+    (manager.borrow().software_interrupt_handler)();
 
     debug!("Software interrupt handled.");
 }
@@ -257,7 +259,7 @@ unsafe extern "C" fn interrupt_entry() {
         "orr r0, r0, {I_BIT}",
         "msr cpsr, r0",
         // 2. Store the trap context.
-        "add r0, sp, 4",
+        "add r0, sp, #4",
         "stmia r0!, {{r1- r14}}",
         "mrs r1, spsr",
         "stmia r0!, {{r1}}",
@@ -268,6 +270,7 @@ unsafe extern "C" fn interrupt_entry() {
         // 4. Restore the environment.
         // The cpsr register will be restored with spsr.
         "ldmia sp!, {{r0- r14}}",
+        "add sp, #4",
         // 5. Call back to the PC.
         // For interrupt, go to PC.
         "subs pc, lr, #4",
@@ -290,8 +293,8 @@ fn interrupt_handler(context: &TrapContext) {
     let source = manager.borrow().read_handling();
     debug!("Encounter hardware interrupt: {}", source);
 
-    let handler = &manager.borrow().interrupt_handlers[usize::from(source)];
-    handler();
+    // Borrow the value in one line.
+    manager.borrow().interrupt_handlers[usize::from(source)]();
 
     // Clear the pending interrupt.
     manager.borrow_mut().clear_pending_interrupt(source);
@@ -309,7 +312,7 @@ unsafe extern "C" fn undefined_exception_entry() {
         "orr r0, r0, {I_BIT}",
         "msr cpsr, r0",
         // 2. Store the trap context.
-        "add r0, sp, 4",
+        "add r0, sp, #4",
         "stmia r0!, {{r1- r14}}",
         "mrs r1, spsr",
         "stmia r0!, {{r1}}",
@@ -320,6 +323,7 @@ unsafe extern "C" fn undefined_exception_entry() {
         // 4. Restore the environment.
         // The cpsr register will be restored with spsr.
         "ldmia sp!, {{r0- r14}}",
+        "add sp, #4",
         // 5. Call back to the PC.
         // For undefined, go to PC + 4.
         "movs pc, lr",
@@ -350,7 +354,7 @@ unsafe extern "C" fn prefetch_exception_entry() {
         "orr r0, r0, {I_BIT}",
         "msr cpsr, r0",
         // 2. Store the trap context.
-        "add r0, sp, 4",
+        "add r0, sp, #4",
         "stmia r0!, {{r1- r14}}",
         "mrs r1, spsr",
         "stmia r0!, {{r1}}",
@@ -361,6 +365,7 @@ unsafe extern "C" fn prefetch_exception_entry() {
         // 4. Restore the environment.
         // The cpsr register will be restored with spsr.
         "ldmia sp!, {{r0- r14}}",
+        "add sp, #4",
         // 5. Call back to the PC.
         // For prefetch exception, go to PC.
         "subs pc, lr, #4",
@@ -391,7 +396,7 @@ unsafe extern "C" fn data_exception_entry() {
         "orr r0, r0, {I_BIT}",
         "msr cpsr, r0",
         // 2. Store the trap context.
-        "add r0, sp, 4",
+        "add r0, sp, #4",
         "stmia r0!, {{r1- r14}}",
         "mrs r1, spsr",
         "stmia r0!, {{r1}}",
@@ -402,6 +407,7 @@ unsafe extern "C" fn data_exception_entry() {
         // 4. Restore the environment.
         // The cpsr register will be restored with spsr.
         "ldmia sp!, {{r0- r14}}",
+        "add sp, #4",
         // 5. Call back to the PC.
         // For data exception, go to PC - 4, which is the real data fetch instruction.
         "subs pc, lr, #8",
