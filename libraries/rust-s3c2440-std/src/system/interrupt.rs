@@ -1,9 +1,10 @@
+use crate::MANAGER;
 use crate::system::stack::STACK_SIZE;
 use crate::system::{StatusRegister, read_cpsr, read_spsr};
-use crate::{MANAGER, debug};
 use alloc::boxed::Box;
 use core::arch::{asm, naked_asm};
 use core::ops::{Deref, DerefMut};
+use log::debug;
 use rust_s3c2440_hal::interrupt::{InterruptController, InterruptSource};
 use rust_s3c2440_hal::utils::Register;
 

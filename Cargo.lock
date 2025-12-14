@@ -21,6 +21,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
+name = "experiment"
+version = "0.1.0"
+dependencies = [
+ "rust-s3c2440-hal",
+ "rust-s3c2440-std",
+]
+
+[[package]]
 name = "flash-reader"
 version = "0.1.0"
 dependencies = [
@@ -35,6 +43,12 @@ dependencies = [
  "rust-s3c2440-hal",
  "rust-s3c2440-std",
 ]
+
+[[package]]
+name = "log"
+version = "0.4.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "paste"
@@ -85,6 +99,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "buddy_system_allocator",
+ "log",
  "rust-s3c2440-hal",
  "rust-s3c2440-macros",
  "seq-macro",

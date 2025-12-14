@@ -1,8 +1,9 @@
-use crate::error;
+use crate::utils::InterruptGuard;
 use buddy_system_allocator::Heap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
 use core::ptr::NonNull;
+use log::error;
 
 /// Heap size.
 /// Set to 10M
@@ -13,8 +14,9 @@ const BUDDY_MAX_ORDER: usize = 32;
 #[unsafe(link_section = ".bss.heap")]
 static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
 
-/// A very dangerous heap for global allocator.
-/// But the S3C2440 only has a core, so it is much safer.
+/// A heap for global allocator.
+/// As S3C2440 only has one core, so during the allocation and deallocation, the interrupt will
+/// be disabled by InterruptGuard.
 pub struct UnsafeHeap(UnsafeCell<Heap<BUDDY_MAX_ORDER>>);
 
 impl UnsafeHeap {
@@ -29,14 +31,21 @@ impl UnsafeHeap {
 
 unsafe impl GlobalAlloc for UnsafeHeap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.heap()
+        let guard = InterruptGuard::new();
+        let result = self
+            .heap()
             .alloc(layout)
             .ok()
-            .map_or(core::ptr::null_mut(), |allocation| allocation.as_ptr())
+            .map_or(core::ptr::null_mut(), |allocation| allocation.as_ptr());
+
+        drop(guard);
+        result
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { self.heap().dealloc(NonNull::new_unchecked(ptr), layout) }
+        let guard = InterruptGuard::new();
+        unsafe { self.heap().dealloc(NonNull::new_unchecked(ptr), layout) };
+        drop(guard);
     }
 }
 
@@ -45,6 +54,8 @@ unsafe impl Sync for UnsafeHeap {}
 #[global_allocator]
 static GLOBAL_ALLOCATOR: UnsafeHeap = UnsafeHeap::empty();
 
+/// Ad all unused memory to heap.
+/// This function should be invoked in interrupt-disabled context.
 pub fn initialize_heap() {
     unsafe {
         let start = HEAP.as_ptr() as usize;

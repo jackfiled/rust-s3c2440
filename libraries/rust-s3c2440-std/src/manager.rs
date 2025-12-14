@@ -1,74 +1,62 @@
-use crate::support::console::S3C2440Console;
-use crate::support::{Log, LogLevel, set_logger};
-use crate::system::PCLK;
+use crate::io::initialize_console;
 use crate::system::heap::initialize_heap;
 use crate::system::interrupt::InterruptManager;
-use crate::{info, println};
-use core::cell::{RefCell, UnsafeCell};
-use core::fmt::Arguments;
+use core::cell::RefCell;
+use log::{Level, LevelFilter, Metadata, Record, info};
 use rust_s3c2440_hal::Global;
-use rust_s3c2440_hal::gpio::{PortHPin2, PortHPin3, PortHPin4, PortHPin5, PortHPin6, PortHPin7};
-use rust_s3c2440_hal::uart::{S3C2440UartController, S3C2440UartControllerBuilder};
 
-pub struct InitializeConfiguration {
-    pub uart_port: usize,
-    pub uart_buad_rate: u32,
-    pub log_level: LogLevel,
-}
+struct S3C2440Logger;
 
-struct Logger {}
-
-impl Log for Logger {
-    fn log(&self, level: LogLevel, agrs: Arguments) {
-        println!("{}: {}", level, agrs);
+impl log::Log for S3C2440Logger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
     }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            println!("{}: {}", record.level(), record.args())
+        }
+    }
+
+    fn flush(&self) {}
 }
 
 /// S3C2440 Board Manager.
 pub struct Manager {
-    /// The UART controllers in S3C2440.
-    uart_controller: S3C2440UartController,
-    console: UnsafeCell<S3C2440Console>,
     interrupt_manager: RefCell<InterruptManager>,
 }
 
 impl Manager {
-    pub fn initialize(configuration: InitializeConfiguration) {
-        let uart_controller = match configuration.uart_port {
-            0 => S3C2440UartControllerBuilder::uart_controller0(
-                PortHPin2::new().into_uart_transmit(),
-                PortHPin3::new().into_uart_receive(),
-            )
-            .initialize(PCLK, configuration.uart_buad_rate),
-            1 => S3C2440UartControllerBuilder::uart_controller1(
-                PortHPin4::new().into_uart_transmit(),
-                PortHPin5::new().into_uart_receive(),
-            )
-            .initialize(PCLK, configuration.uart_buad_rate),
-            2 => S3C2440UartControllerBuilder::uart_controller2(
-                PortHPin6::new().into_uart_transmit(),
-                PortHPin7::new().into_uart_receive(),
-            )
-            .initialize(PCLK, configuration.uart_buad_rate),
-            _ => unreachable!(),
-        };
-        let console = S3C2440Console::new(uart_controller);
+    pub fn initialize() {
+        initialize_console();
+        // Panic handler is usable.
+
+        unsafe {
+            log::set_logger_racy(&S3C2440Logger)
+                .map(|()| log::set_max_level_racy(LevelFilter::Info))
+                .unwrap()
+        }
+
+        // The print and log related macros should be usable.
+        info!("Hello S3C2440!");
+
+        initialize_heap();
+        info!("Heap initialized.");
 
         let interrupt_manager = InterruptManager::new();
 
         MANAGER.init(Manager {
-            uart_controller,
-            console: UnsafeCell::new(console),
             interrupt_manager: RefCell::new(interrupt_manager),
         });
-        set_logger(&Logger {}, configuration.log_level);
 
-        initialize_heap();
-        info!("Heap initialized.");
-    }
-
-    pub fn console(&self) -> &mut S3C2440Console {
-        unsafe { &mut (*self.console.get()) }
+        // Enable interrupt handling before exiting.
+        MANAGER
+            .get()
+            .unwrap()
+            .interrupt()
+            .borrow_mut()
+            .enable_interrupt();
+        info!("Interrupt has been enabled.");
     }
 
     pub fn interrupt(&self) -> &RefCell<InterruptManager> {

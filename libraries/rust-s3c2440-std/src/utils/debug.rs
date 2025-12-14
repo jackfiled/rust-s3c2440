@@ -1,6 +1,6 @@
-use crate::debug;
 use crate::system::read_cpsr;
 use core::arch::asm;
+use log::debug;
 
 pub fn print_debug_info() {
     let sp: u32;

@@ -12,14 +12,15 @@ use rust_s3c2440_std::system::PCLK;
 /// can run an application written in Rust on the S3C2440.
 #[entry(call_init = false)]
 fn main() -> ! {
-    let controller = S3C2440UartControllerBuilder::uart_controller0(
+    let builder = S3C2440UartControllerBuilder::uart_controller0(
         PortHPin2::new().into_uart_transmit(),
         PortHPin3::new().into_uart_receive(),
-    )
-    .initialize(PCLK, 115200);
+    );
 
-    for c in b"Hello from Rust!" {
-        controller.try_write(core::slice::from_ref(c));
+    let controller = builder.build_fifo::<PCLK, 115200>();
+
+    for _ in 0..100 {
+        controller.try_write(b"Hello, TQ2440!\r\n");
         nop();
     }
 

@@ -9,3 +9,4 @@ seq-macro = "0.3.6"
 buddy_system_allocator = { version = "0.11.0", default-features = false, features = ["alloc"] }
 rust-s3c2440-macros = { version = "0.1.0", path = "../rust-s3c2440-macros" }
 rust-s3c2440-hal = { version = "0.1.0", path = "../rust-s3c2440-hal" }
+log = "0.4.29"

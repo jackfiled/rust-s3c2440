@@ -121,7 +121,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn reigster_read_write_test() {
+    pub fn register_read_write_test() {
         let register = Register(UnsafeCell::new(0));
 
         assert_eq!(0, register.read());

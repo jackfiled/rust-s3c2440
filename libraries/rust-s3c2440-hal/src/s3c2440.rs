@@ -44,3 +44,8 @@ impl Display for CpuMode {
         }
     }
 }
+
+/// The base address of 3 UART controllers.
+pub const UART_CONTROLLER_BASE: usize = 0x5000_0000;
+/// The delta between UART controllers.
+pub const UART_CONTROLLER_DELTA: usize = 0x4000;

@@ -4,13 +4,15 @@
 #![allow(dead_code)]
 #![allow(static_mut_refs)]
 
-use crate::manager::{InitializeConfiguration, Manager};
+use crate::manager::Manager;
 use core::panic::PanicInfo;
+use log::{error, info};
 
 extern crate alloc;
 
+#[macro_use]
+pub mod io;
 mod manager;
-pub mod support;
 pub mod system;
 pub mod utils;
 
@@ -21,20 +23,13 @@ unsafe extern "C" {
     fn rust_main() -> !;
 }
 
-use crate::support::LogLevel;
 /// Use this macro to decorate the user main function.
 /// Reimport from rust-s3c2440-macros.
 pub use rust_s3c2440_macros::entry;
 
-const CONFIGURATION: InitializeConfiguration = InitializeConfiguration {
-    uart_port: 0,
-    uart_buad_rate: 115200,
-    log_level: LogLevel::Debug,
-};
-
 /// Hook function will be called before entry function running.
 pub fn init_board() {
-    Manager::initialize(CONFIGURATION);
+    Manager::initialize();
     info!("Board manager is initialized.");
 }
 
