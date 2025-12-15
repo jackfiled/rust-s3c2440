@@ -5,7 +5,9 @@ mod state;
 use core::error::Error;
 use core::fmt::{Display, Formatter};
 use embedded_hal::digital::ErrorKind;
+
 pub use port::*;
+pub use register::{Port, gpio_port_controller};
 pub use state::*;
 
 #[derive(Debug)]

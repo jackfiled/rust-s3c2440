@@ -1,4 +1,5 @@
 use core::cell::UnsafeCell;
+use core::ops::{BitAndAssign, BitOrAssign};
 use core::ptr;
 
 #[repr(transparent)]
@@ -70,6 +71,18 @@ impl Register {
     }
 }
 
+impl BitAndAssign<u32> for Register {
+    fn bitand_assign(&mut self, rhs: u32) {
+        self.write(self.read() & rhs);
+    }
+}
+
+impl BitOrAssign<u32> for Register {
+    fn bitor_assign(&mut self, rhs: u32) {
+        self.write(self.read() | rhs);
+    }
+}
+
 /// A global variable container with initialize-once guaranteed.
 pub struct Global<T> {
     initialized: UnsafeCell<bool>,
@@ -113,6 +126,19 @@ impl<T> Global<T> {
 
     pub unsafe fn get_unchecked(&self) -> &T {
         unsafe { &*(self.value.get() as *const T) }
+    }
+}
+
+pub trait BitValue {
+    fn value(&self) -> u32;
+}
+
+impl BitValue for bool {
+    fn value(&self) -> u32 {
+        match self {
+            true => 1,
+            false => 0,
+        }
     }
 }
 
@@ -167,5 +193,18 @@ mod tests {
         register.set_bit(2, 2 * 3, 2);
 
         assert_eq!(0b10100000, register.read());
+    }
+
+    const L3C: u32 = 1 << 4;
+    const L3D: u32 = 1 << 3;
+    const L3M: u32 = 1 << 2;
+
+    #[test]
+    pub fn l3_register_set_test() {
+        let register = Register(UnsafeCell::new(0));
+
+        register.write(register.read() & !(L3D | L3M | L3C) | L3C);
+
+        assert_eq!(16, register.read());
     }
 }

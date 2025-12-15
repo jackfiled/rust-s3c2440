@@ -4,8 +4,9 @@ use crate::gpio::{
     PortEPin1, PortEPin2, PortEPin3, PortEPin4,
 };
 use crate::nop;
-use crate::utils::Register;
+use crate::utils::{BitValue, Register};
 use core::ops::Deref;
+use log::info;
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,13 +81,13 @@ pub enum WaveFormatKind {
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum CodecClockKind {
+pub enum IisClockKind {
     FS256 = 256,
     FS384 = 384,
 }
 
-impl CodecClockKind {
-    const KINDS: [CodecClockKind; 2] = [CodecClockKind::FS256, CodecClockKind::FS384];
+impl IisClockKind {
+    const KINDS: [IisClockKind; 2] = [IisClockKind::FS256, IisClockKind::FS384];
 }
 
 #[repr(C)]
@@ -107,6 +108,7 @@ pub struct IisConfig {
     enable_send: bool,
     enable_receive: bool,
     enable_dma: bool,
+    enable_mbs_format: bool,
 }
 
 impl IisConfig {
@@ -116,6 +118,7 @@ impl IisConfig {
         enable_send: bool,
         enable_receive: bool,
         enable_dma: bool,
+        enable_mbs_format: bool,
     ) -> Self {
         Self {
             bits_per_sample,
@@ -123,6 +126,7 @@ impl IisConfig {
             enable_send,
             enable_receive,
             enable_dma,
+            enable_mbs_format,
         }
     }
 
@@ -130,25 +134,27 @@ impl IisConfig {
     /// PCLK factor to obtain a frequency closest to the requesting one.
     /// As the document show, the frequency will be PCLK / (r + 1) / N.
     /// Then N can be 256 or 384.
-    pub fn select_codec_clock_and_prescaler(&self, clock: u32) -> (CodecClockKind, u32) {
-        let divider_256 = self.calculate_clock_and_prescaler(clock, CodecClockKind::FS256);
+    pub fn select_codec_clock_and_prescaler(&self, clock: u32) -> (IisClockKind, u32) {
+        let divider_256 = self.calculate_clock_and_prescaler(clock, IisClockKind::FS256);
         let difference_256 = self
             .samples_per_second
-            .abs_diff(clock / (divider_256 + 1) / (CodecClockKind::FS256 as u32));
+            .abs_diff(clock / (divider_256 + 1) / (IisClockKind::FS256 as u32));
 
-        let divider_384 = self.calculate_clock_and_prescaler(clock, CodecClockKind::FS384);
+        let divider_384 = self.calculate_clock_and_prescaler(clock, IisClockKind::FS384);
         let difference_384 = self
             .samples_per_second
-            .abs_diff(clock / (divider_384 + 1) / (CodecClockKind::FS384 as u32));
+            .abs_diff(clock / (divider_384 + 1) / (IisClockKind::FS384 as u32));
 
         if difference_384 < difference_256 {
-            (CodecClockKind::FS384, divider_384)
+            info!("Codec Clock is set to use 384FS, and divider value is {divider_384}.");
+            (IisClockKind::FS384, divider_384)
         } else {
-            (CodecClockKind::FS256, divider_256)
+            info!("Codec Clock is set to use 256FS, and divider value is {divider_256}.");
+            (IisClockKind::FS256, divider_256)
         }
     }
 
-    fn calculate_clock_and_prescaler(&self, clock: u32, kind: CodecClockKind) -> u32 {
+    fn calculate_clock_and_prescaler(&self, clock: u32, kind: IisClockKind) -> u32 {
         let target_frequency = self.samples_per_second * (kind as u32);
 
         // The divider will be a smaller number than the accurate value.
@@ -175,30 +181,6 @@ pub struct IisHandler<'a> {
 
 impl IisHandler<'_> {
     pub fn start(&self) {
-        let mut fifo_control_value = 0;
-
-        if self.enable_dma {
-            if self.enable_send {
-                fifo_control_value |= 1 << 15;
-            }
-
-            if self.enable_receive {
-                fifo_control_value |= 1 << 14;
-            }
-        }
-
-        if self.enable_send {
-            fifo_control_value |= 1 << 13;
-        }
-
-        if self.enable_receive {
-            fifo_control_value |= 1 << 12;
-        }
-
-        // Configure the FIFO control register.
-        self.controller
-            .fifo_control_register
-            .write(fifo_control_value);
         // Enable IIS controller.
         self.controller.control_register.set_bit(1, 0, 1);
     }
@@ -232,12 +214,13 @@ impl IisHandler<'_> {
         (value >> 6) & 0x3f
     }
 
-    pub fn read_control_register(&self) -> u32 {
-        self.controller.control_register.read()
-    }
-
-    pub fn read_fifo_control_register(&self) -> u32 {
-        self.controller.fifo_control_register.read()
+    pub fn list_registers(&self) -> [u32; 4] {
+        [
+            self.controller.pre_scaler_register.read(),
+            self.controller.mode_register.read(),
+            self.controller.control_register.read(),
+            self.controller.fifo_control_register.read(),
+        ]
     }
 }
 
@@ -276,38 +259,45 @@ impl IisController {
         let (kind, divider) = config.select_codec_clock_and_prescaler(clock);
         self.pre_scaler_register.write(divider << 5 | divider);
 
-        let mut control_mode = 0
-            | if !config.enable_send { 1 << 3 } else { 0 }
-            | if !config.enable_receive { 1 << 2 } else { 0 }
-            | 1 << 1; // Enable prescaler.
+        let mut control_mode =
+            0 | (!config.enable_send).value() << 3 | (!config.enable_receive).value() << 2 | 1 << 1; // Enable prescaler.
 
         if config.enable_dma {
-            control_mode |= if config.enable_send { 1 << 5 } else { 0 }
-                | if config.enable_receive { 1 << 4 } else { 0 };
+            control_mode =
+                control_mode | config.enable_send.value() << 5 | config.enable_receive.value() << 4;
         }
         self.control_register.write(control_mode);
 
         let iis_mode = (0 << 10) // Use PCLK as input clock.
             | (0 << 8) // Master mode.
-            | match (config.enable_send, config.enable_receive) {
-            (true, true) => 3 << 6,
-            (true, false) => 2 << 6,
-            (false, true) => 1 << 6,
-            _ => 0
-        } // Send or receive mode.
+            | config.enable_send.value() << 7
+            | config.enable_receive.value() << 6
             | 0 << 5 // Master mode.
-            | 0 << 4 // IIS format.
+            | config.enable_mbs_format.value() << 4 // 0 -> IIS format, 1 -> MBS format.
             | match config.bits_per_sample {
             8 => 0 << 3,
             16 => 1 << 3,
             _ => unreachable!()
         } // Bits pre samples.
             | match kind {
-            CodecClockKind::FS256 => 0 << 2,
-            CodecClockKind::FS384 => 1 << 2
+            IisClockKind::FS256 => 0 << 2,
+            IisClockKind::FS384 => 1 << 2
         }
             | 1; // Use 32fs as the serial clock as which is most compatible.
         self.mode_register.write(iis_mode);
+
+        let mut fifo_control_value = 0;
+
+        // DMA channel.
+        fifo_control_value |= (config.enable_dma && config.enable_send).value() << 15;
+        fifo_control_value |= (config.enable_dma && config.enable_receive).value() << 14;
+
+        // FIFO switch.
+        fifo_control_value |= config.enable_send.value() << 13;
+        fifo_control_value |= config.enable_receive.value() << 12;
+
+        // Configure the FIFO control register.
+        self.fifo_control_register.write(fifo_control_value);
 
         IisHandler {
             controller: self,
@@ -331,8 +321,8 @@ mod tests {
 
     #[test]
     fn codec_kind_tests() {
-        assert_eq!(256, CodecClockKind::FS256 as u32);
-        assert_eq!(384, CodecClockKind::FS384 as u32);
+        assert_eq!(256, IisClockKind::FS256 as u32);
+        assert_eq!(384, IisClockKind::FS384 as u32);
     }
 
     #[test]
@@ -343,12 +333,13 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         // Not the same as the referred code, which is 23/FS256.
         assert_eq!(
             25,
-            config.calculate_clock_and_prescaler(PCLK, CodecClockKind::FS256)
+            config.calculate_clock_and_prescaler(PCLK, IisClockKind::FS256)
         );
 
         let config = IisConfig {
@@ -357,11 +348,12 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
             11,
-            config.calculate_clock_and_prescaler(PCLK, CodecClockKind::FS384)
+            config.calculate_clock_and_prescaler(PCLK, IisClockKind::FS384)
         );
     }
 
@@ -373,10 +365,11 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
-            (CodecClockKind::FS384, 16),
+            (IisClockKind::FS384, 16),
             config.select_codec_clock_and_prescaler(PCLK)
         );
 
@@ -386,10 +379,11 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
-            (CodecClockKind::FS256, 18),
+            (IisClockKind::FS256, 18),
             config.select_codec_clock_and_prescaler(PCLK)
         );
 
@@ -399,10 +393,25 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
-            (CodecClockKind::FS256, 12),
+            (IisClockKind::FS256, 12),
+            config.select_codec_clock_and_prescaler(PCLK)
+        );
+
+        let config = IisConfig {
+            bits_per_sample: 16,
+            samples_per_second: 22050,
+            enable_send: true,
+            enable_receive: false,
+            enable_dma: false,
+            enable_mbs_format: false,
+        };
+
+        assert_eq!(
+            (IisClockKind::FS256, 8),
             config.select_codec_clock_and_prescaler(PCLK)
         );
 
@@ -412,10 +421,11 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
-            (CodecClockKind::FS384, 2),
+            (IisClockKind::FS384, 2),
             config.select_codec_clock_and_prescaler(PCLK)
         );
 
@@ -425,10 +435,11 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
+            enable_mbs_format: false,
         };
 
         assert_eq!(
-            (CodecClockKind::FS384, 2),
+            (IisClockKind::FS384, 2),
             config.select_codec_clock_and_prescaler(PCLK)
         );
     }

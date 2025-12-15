@@ -1,18 +1,5 @@
-use crate::utils::Register;
+use crate::utils::{BitValue, Register};
 use core::ops::Deref;
-
-trait BitValue {
-    fn value(&self) -> u32;
-}
-
-impl BitValue for bool {
-    fn value(&self) -> u32 {
-        match self {
-            true => 1,
-            false => 0,
-        }
-    }
-}
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]

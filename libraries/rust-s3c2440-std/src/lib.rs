@@ -10,6 +10,7 @@ use log::{error, info};
 
 extern crate alloc;
 
+pub mod audio;
 #[macro_use]
 pub mod io;
 mod manager;

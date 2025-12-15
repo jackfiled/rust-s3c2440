@@ -49,3 +49,21 @@ impl Display for CpuMode {
 pub const UART_CONTROLLER_BASE: usize = 0x5000_0000;
 /// The delta between UART controllers.
 pub const UART_CONTROLLER_DELTA: usize = 0x4000;
+
+pub const GPACON: usize = 0x56000000; // Port A control
+
+pub const GPBCON: usize = 0x56000010; // Port B control
+
+pub const GPCCON: usize = 0x56000020; // Port C control
+
+pub const GPDCON: usize = 0x56000030; // Port D control
+
+pub const GPECON: usize = 0x56000040; // Port E control
+
+pub const GPFCON: usize = 0x56000050; // Port F control
+
+pub const GPGCON: usize = 0x56000060; // Port G control
+
+pub const GPHCON: usize = 0x56000070; // Port H control
+
+pub const GPJCON: usize = 0x560000d0; // Port J control

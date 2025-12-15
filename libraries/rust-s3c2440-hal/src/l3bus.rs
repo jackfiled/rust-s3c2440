@@ -1,19 +1,21 @@
-use crate::delay_cycles;
-use crate::gpio::{Output, PortBPin2, PortBPin3, PortBPin4, PushPull};
-use embedded_hal::digital::OutputPin;
+use crate::gpio::{Output, Port, PortBPin2, PortBPin3, PortBPin4, PushPull, gpio_port_controller};
+use crate::iis::IisClockKind;
+use crate::nop;
+use crate::utils::{BitValue, Register};
+use log::debug;
 
 /// L3 Bus is a special bus used by the UDA1341 codec chip.
 /// This bus only contains three lines:
 /// - Clock
 /// - Data
 /// - Mode.
-pub struct L3BusController<PM: OutputPin, PD: OutputPin, PC: OutputPin> {
-    mode: PM,
-    data: PD,
-    clock: PC,
-}
+pub struct L3BusController;
 
-impl<PM: OutputPin, PD: OutputPin, PC: OutputPin> L3BusController<PM, PD, PC> {
+const L3C: u32 = 1 << 4;
+const L3D: u32 = 1 << 3;
+const L3M: u32 = 1 << 2;
+
+impl L3BusController {
     /// UDA11341 Bus Address 000101.
     /// The bus address will be sent by the bit 7 ~ bit2, so the value is 000101xx -> 0x14.
     const BUS_ADDRESS: u8 = 0x14;
@@ -21,65 +23,97 @@ impl<PM: OutputPin, PD: OutputPin, PC: OutputPin> L3BusController<PM, PD, PC> {
     const DATA1_MODE: u8 = 0x1;
     const STATUS_MODE: u8 = 0x2;
 
-    fn write_address(&mut self, address: u8) {
-        // Pull up the clock.
-        self.clock.set_high().unwrap();
-        self.mode.set_high().unwrap();
-        self.tick();
+    pub fn new(
+        _mode: PortBPin2<Output<PushPull>>,
+        _data: PortBPin3<Output<PushPull>>,
+        _clock: PortBPin4<Output<PushPull>>,
+    ) -> Self {
+        let controller = Self;
 
-        // Pull down the mode to send an address.
-        self.mode.set_low().unwrap();
+        let port_b = gpio_port_controller(Port::B);
+        port_b
+            .control_register
+            .write(port_b.control_register.read() & !(0x3f << 4) | (0x15 << 4));
+        port_b
+            .pull_up_register
+            .write(port_b.pull_up_register.read() & !(0x7 << 2) | (0x7 << 2));
 
-        // Waiting for setting up.
-        self.tick();
+        port_b
+            .data_register
+            .write(controller.port_b_data().read() & !(L3M | L3C | L3D) | (L3M | L3C)); //Start condition : L3M=H, L3C=H
 
-        // Start to send 8 bits.
-        for i in 0..8u8 {
-            // Pull down the clock to send bit.
-            self.clock.set_low().unwrap();
-            match (address >> i) & 0x1 == 1 {
-                true => self.data.set_high().unwrap(),
-                false => self.data.set_low().unwrap(),
-            }
-
-            self.tick();
-
-            // Pull up the clock.
-            self.clock.set_high().unwrap();
-            self.tick()
-        }
-
-        // Pull up the mode.
-        self.mode.set_high().unwrap();
-        self.tick();
+        controller
     }
 
-    fn write_data(&mut self, data: u8, halt: bool) {
-        // If we need to send another data after sending a data.
-        // We need to pull down and pull up the mode signal to reenter the data mode.
+    fn write_address(&mut self, mut address: u8) {
+        self.port_b_data()
+            .write(self.port_b_data().read() & !(L3D | L3M | L3C) | L3C);
+        self.tick();
 
-        if halt {
-            self.mode.set_low().unwrap();
-            self.tick();
-            self.mode.set_high().unwrap();
-            self.tick();
-        }
+        for _ in 0..8 {
+            if address & 0x1 != 0 {
+                *self.port_b_data() &= !L3C; //L3C=L
+                *self.port_b_data() |= L3D; //L3D=H
+                self.tick();
 
-        // If we just send data after sending an address, we send the 8 bit seamlessly, as we pull
-        // up the mode signal in the end of sending address.
-        for i in 0..8u8 {
-            // Pull down the clock signal.
-            self.clock.set_low().unwrap();
-            match (data >> i) & 0x1 == 1 {
-                true => self.data.set_high().unwrap(),
-                false => self.data.set_low().unwrap(),
+                *self.port_b_data() |= L3C; //L3C=H
+                *self.port_b_data() |= L3D; //L3D=H
+                self.tick();
+            } else {
+                *self.port_b_data() &= !L3C; //L3C=L
+                *self.port_b_data() &= !L3D; //L3D=L
+                self.tick();
+
+                *self.port_b_data() |= L3C; //L3C=H
+                *self.port_b_data() &= !L3D; //L3D=L
+                self.tick();
             }
-            self.tick();
 
-            // Pull up the clock signal.
-            self.clock.set_high().unwrap();
+            address >>= 1;
+        }
+
+        self.port_b_data()
+            .write(self.port_b_data().read() & !(L3M | L3C | L3D) | (L3M | L3C)); //Start condition : L3M=H, L3C=H
+    }
+
+    fn write_data(&mut self, mut data: u8, halt: bool) {
+        if halt {
+            //L3C=H(while tstp, L3 interface halt condition)
+            self.port_b_data()
+                .write(self.port_b_data().read() & !(L3D | L3M | L3C) | L3C);
             self.tick();
         }
+        self.port_b_data()
+            .write(self.port_b_data().read() & !(L3M | L3C | L3D) | (L3M | L3C)); //L3M=H(in data transfer mode)
+        self.tick();
+
+        //GPB[4:2]=L3C:L3D:L3M
+        for _ in 0..8 {
+            if (data & 0x1) != 0
+            //if data's LSB is 'H'
+            {
+                *self.port_b_data() &= !L3C; //L3C=L
+                *self.port_b_data() |= L3D; //L3D=H
+                self.tick();
+
+                *self.port_b_data() |= L3C | L3D; //L3C=H,L3D=H
+                self.tick();
+            } else
+            //If data's LSB is 'L'
+            {
+                *self.port_b_data() &= !L3C; //L3C=L
+                *self.port_b_data() &= !L3D; //L3D=L
+                self.tick();
+
+                *self.port_b_data() |= L3C; //L3C=H
+                *self.port_b_data() &= !L3D; //L3D=L
+                self.tick();
+            }
+            data >>= 1; //For check next bit
+        }
+
+        self.port_b_data()
+            .write(self.port_b_data().read() & !(L3M | L3C | L3D) | (L3M | L3C)); //L3M=H,L3C=H
     }
 
     #[inline]
@@ -88,10 +122,20 @@ impl<PM: OutputPin, PD: OutputPin, PC: OutputPin> L3BusController<PM, PD, PC> {
         // So 72 * 4ns = 288ns.
         // And for L3 bus, the cycle is about 500ns, the data/address should be preserved on the
         // bus for 250ns at least. And 72 cycle is suitable for `delay_cycles` function.
-        delay_cycles(72);
+        // delay_cycles(72);
+
+        // At last, use reference code.
+        for _ in 0..4 {
+            nop();
+        }
     }
 
-    pub fn enter_status_mode(&mut self) -> L3StatusMode<'_, PM, PD, PC> {
+    #[inline(always)]
+    fn port_b_data(&self) -> &mut Register {
+        &mut gpio_port_controller(Port::B).data_register
+    }
+
+    pub fn enter_status_mode(&mut self) -> L3StatusMode<'_> {
         self.write_address(Self::BUS_ADDRESS + Self::STATUS_MODE);
 
         L3StatusMode {
@@ -100,7 +144,7 @@ impl<PM: OutputPin, PD: OutputPin, PC: OutputPin> L3BusController<PM, PD, PC> {
         }
     }
 
-    pub fn enter_data0_mode(&mut self) -> L3Data0Mode<'_, PM, PD, PC> {
+    pub fn enter_data0_mode(&mut self) -> L3Data0Mode<'_> {
         self.write_address(Self::BUS_ADDRESS + Self::DATA0_MODE);
 
         L3Data0Mode {
@@ -110,40 +154,49 @@ impl<PM: OutputPin, PD: OutputPin, PC: OutputPin> L3BusController<PM, PD, PC> {
     }
 }
 
-impl
-    L3BusController<
-        PortBPin2<Output<PushPull>>,
-        PortBPin3<Output<PushPull>>,
-        PortBPin4<Output<PushPull>>,
-    >
-{
-    pub fn new(
-        b2: PortBPin2<Output<PushPull>>,
-        b3: PortBPin3<Output<PushPull>>,
-        b4: PortBPin4<Output<PushPull>>,
-    ) -> Self {
-        Self {
-            mode: b2,
-            data: b3,
-            clock: b4,
+pub struct L3StatusMode<'a> {
+    controller: &'a mut L3BusController,
+    halt: bool,
+}
+
+#[repr(u8)]
+pub enum CodecClockKind {
+    F512 = 0b00,
+    F384 = 0b01,
+    F256 = 0b10,
+}
+
+impl From<IisClockKind> for CodecClockKind {
+    fn from(value: IisClockKind) -> Self {
+        match value {
+            IisClockKind::FS384 => Self::F384,
+            IisClockKind::FS256 => Self::F256,
         }
     }
 }
 
-pub struct L3StatusMode<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> {
-    controller: &'a mut L3BusController<PM, PD, PC>,
-    halt: bool,
+#[repr(u8)]
+pub enum DataInputFormat {
+    IISFormat = 0b000,
+    MSBFormat = 0b100,
 }
 
-impl<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> L3StatusMode<'a, PM, PD, PC> {
-    pub fn control_group0(&mut self, reset: bool, frequency: u8, data_format: u8, filter: bool) {
+impl<'a> L3StatusMode<'a> {
+    pub fn control_group0(
+        &mut self,
+        reset: bool,
+        clock_setting: CodecClockKind,
+        data_format: DataInputFormat,
+        filter: bool,
+    ) {
         // Format: 0 RST SC1 SC0 IF2 IF1 IF0 FILTER
         let mut data = 0;
-        data |= if reset { 1 << 6 } else { 0 };
-        data |= frequency << 4;
-        data |= data_format << 1;
-        data |= if filter { 1 } else { 0 };
+        data |= (reset.value() as u8) << 6;
+        data |= (clock_setting as u8) << 4;
+        data |= (data_format as u8) << 1;
+        data |= filter.value() as u8;
 
+        debug!("Writing status data: 0x{data:x}");
         self.controller.write_data(data, self.halt);
         self.halt = true;
     }
@@ -155,27 +208,30 @@ impl<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> L3StatusMode<'a, PM, PD, P
         adc_polarity: bool,
         dac_polarity: bool,
         double_speed: bool,
-        power: u8,
+        enable_adc: bool,
+        enable_dac: bool,
     ) {
         let mut data = 1 << 7;
-        data |= if output_gain { 1 << 6 } else { 0 };
-        data |= if input_gain { 1 << 5 } else { 0 };
-        data |= if adc_polarity { 1 << 4 } else { 0 };
-        data |= if dac_polarity { 1 << 3 } else { 0 };
-        data |= if double_speed { 1 << 2 } else { 0 };
-        data |= power & 0x3;
+        data |= output_gain.value() << 6;
+        data |= input_gain.value() << 5;
+        data |= adc_polarity.value() << 4;
+        data |= dac_polarity.value() << 3;
+        data |= double_speed.value() << 2;
+        data |= enable_adc.value() << 1;
+        data |= enable_dac.value();
 
-        self.controller.write_data(data, self.halt);
+        debug!("Writing status data: 0x{data:x}");
+        self.controller.write_data(data as u8, self.halt);
         self.halt = true;
     }
 }
 
-pub struct L3Data0Mode<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> {
-    controller: &'a mut L3BusController<PM, PD, PC>,
+pub struct L3Data0Mode<'a> {
+    controller: &'a mut L3BusController,
     halt: bool,
 }
 
-impl<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> L3Data0Mode<'a, PM, PD, PC> {
+impl<'a> L3Data0Mode<'a> {
     pub fn control_volume(&mut self, volume: u8) {
         self.controller.write_data(volume & 0x3f, self.halt);
         self.halt = true;
@@ -186,18 +242,21 @@ impl<'a, PM: OutputPin, PD: OutputPin, PC: OutputPin> L3Data0Mode<'a, PM, PD, PC
         data |= (bass & 0xf) << 2;
         data |= treble & 0x3;
 
+        debug!("Writing status data: 0x{data:x}");
         self.controller.write_data(data, self.halt);
         self.halt = true;
     }
 
-    pub fn control_misc(&mut self, detect_peak: bool, emphasis: u8, mute: bool, mode: u8) {
+    pub fn control_misc(&mut self, detect_peak: bool, emphasis: u32, mute: bool, mode: u32) {
         let mut data = 1 << 7;
-        data |= if detect_peak { 1 << 5 } else { 0 };
+        data |= detect_peak.value() << 5;
         data |= emphasis << 3;
         data |= if mute { 1 << 2 } else { 0 };
+        data |= mute.value() << 2;
         data |= mode & 0x3;
 
-        self.controller.write_data(data, self.halt);
+        debug!("Writing status data: 0x{data:x}");
+        self.controller.write_data(data as u8, self.halt);
         self.halt = true;
     }
 }

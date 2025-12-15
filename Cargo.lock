@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "audio-test"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "rust-s3c2440-hal",
+ "rust-s3c2440-std",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,6 +89,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "embedded-hal",
+ "log",
  "paste",
  "seq-macro",
 ]
