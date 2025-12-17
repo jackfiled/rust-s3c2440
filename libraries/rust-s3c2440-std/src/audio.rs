@@ -25,7 +25,7 @@ const BUFFER_SIZE: usize = 16 * 1024;
 
 pub struct AudioPlayerHandler<'a> {
     player: &'a AudioPlayer,
-    iis_handler: IisHandler<'a>,
+    pub iis_handler: IisHandler<'a>,
     dma_channel: Rc<RefCell<DmaController>>,
 }
 
@@ -98,7 +98,7 @@ impl AudioPlayer {
 
         let mut data_config = self.l3_bus.enter_data0_mode();
         // Volume 0 means 0db.
-        data_config.control_volume(0xf);
+        data_config.control_volume(0x8);
 
         // 3. Register a DMA callback.
         let callback = Rc::new(RefCell::new(AudioDmaCallback {
@@ -135,9 +135,10 @@ impl AudioPlayer {
                 }),
             );
 
+        // 4. Configure the IIS controller.
         let iis_handler = self.iis_controller.configure(&iis_config, PCLK);
 
-        // 3. Start DMA channel.
+        // 5. Start DMA channel.
         info!("Starting DMA transferring...");
         dma_channel.borrow_mut().start_dma(
             data_address.as_ptr() as usize,
@@ -146,12 +147,11 @@ impl AudioPlayer {
             BUFFER_SIZE as u32 / 2,
         );
 
-        // 4. Enable IIS controller.
+        // 6. Enable IIS controller.
         info!("Starting IIS controller...");
         iis_handler.start();
 
         info!("Music should be playing...");
-
         AudioPlayerHandler {
             player: self,
             iis_handler,

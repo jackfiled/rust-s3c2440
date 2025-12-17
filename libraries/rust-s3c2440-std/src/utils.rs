@@ -1,4 +1,5 @@
 use crate::system::read_cpsr;
+use core::arch::asm;
 
 pub mod cell;
 pub mod debug;
@@ -43,4 +44,18 @@ impl Drop for InterruptGuard {
 
         cpsr.write_cpsr();
     }
+}
+
+pub fn load_u16(ptr: usize) -> u16 {
+    let result: u16;
+
+    unsafe {
+        asm!(
+        "ldrh {}, [{}]",
+        out(reg) result,
+        in(reg) ptr
+        )
+    }
+
+    result
 }

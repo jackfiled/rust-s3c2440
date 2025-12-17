@@ -108,7 +108,7 @@ pub struct IisConfig {
     enable_send: bool,
     enable_receive: bool,
     enable_dma: bool,
-    enable_mbs_format: bool,
+    enable_msb_format: bool,
 }
 
 impl IisConfig {
@@ -118,7 +118,7 @@ impl IisConfig {
         enable_send: bool,
         enable_receive: bool,
         enable_dma: bool,
-        enable_mbs_format: bool,
+        enable_msb_format: bool,
     ) -> Self {
         Self {
             bits_per_sample,
@@ -126,7 +126,7 @@ impl IisConfig {
             enable_send,
             enable_receive,
             enable_dma,
-            enable_mbs_format,
+            enable_msb_format,
         }
     }
 
@@ -152,6 +152,17 @@ impl IisConfig {
             info!("Codec Clock is set to use 256FS, and divider value is {divider_256}.");
             (IisClockKind::FS256, divider_256)
         }
+
+        // match self.samples_per_second {
+        //     8000 => (IisClockKind::FS256, 23),
+        //     11025 => (IisClockKind::FS384, 11),
+        //     16000 => (IisClockKind::FS256, 11),
+        //     22050 => (IisClockKind::FS384, 5),
+        //     32000 => (IisClockKind::FS256, 5),
+        //     44100 => (IisClockKind::FS384, 2),
+        //     48000 => (IisClockKind::FS256, 3),
+        //     _ => panic!("Not supported."),
+        // }
     }
 
     fn calculate_clock_and_prescaler(&self, clock: u32, kind: IisClockKind) -> u32 {
@@ -214,13 +225,30 @@ impl IisHandler<'_> {
         (value >> 6) & 0x3f
     }
 
-    pub fn list_registers(&self) -> [u32; 4] {
+    pub fn list_registers(&self) {
         [
             self.controller.pre_scaler_register.read(),
             self.controller.mode_register.read(),
             self.controller.control_register.read(),
             self.controller.fifo_control_register.read(),
-        ]
+        ];
+
+        info!(
+            "IIS pre scaler register = 0x{:x}",
+            self.controller.pre_scaler_register.read()
+        );
+        info!(
+            "IIS mode register = 0x{:x}",
+            self.controller.mode_register.read()
+        );
+        info!(
+            "IIS control register = 0x{:x}",
+            self.controller.control_register.read()
+        );
+        info!(
+            "IIS FIFO control register = 0x{:x}",
+            self.controller.fifo_control_register.read()
+        );
     }
 }
 
@@ -268,12 +296,12 @@ impl IisController {
         }
         self.control_register.write(control_mode);
 
-        let iis_mode = (0 << 10) // Use PCLK as input clock.
+        let iis_mode = (0 << 9) // Use PCLK as input clock.
             | (0 << 8) // Master mode.
             | config.enable_send.value() << 7
             | config.enable_receive.value() << 6
             | 0 << 5 // Master mode.
-            | config.enable_mbs_format.value() << 4 // 0 -> IIS format, 1 -> MBS format.
+            | config.enable_msb_format.value() << 4 // 0 -> IIS format, 1 -> MBS format.
             | match config.bits_per_sample {
             8 => 0 << 3,
             16 => 1 << 3,
@@ -333,7 +361,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         // Not the same as the referred code, which is 23/FS256.
@@ -348,7 +376,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -365,7 +393,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -379,7 +407,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -393,7 +421,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -407,7 +435,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -421,7 +449,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
@@ -435,7 +463,7 @@ mod tests {
             enable_send: true,
             enable_receive: false,
             enable_dma: false,
-            enable_mbs_format: false,
+            enable_msb_format: false,
         };
 
         assert_eq!(
