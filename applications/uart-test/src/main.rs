@@ -3,9 +3,10 @@
 
 use rust_s3c2440_hal::gpio::{PortHPin2, PortHPin3};
 use rust_s3c2440_hal::nop;
+use rust_s3c2440_hal::s3c2440::PCLK;
 use rust_s3c2440_hal::uart::S3C2440UartControllerBuilder;
 use rust_s3c2440_std::entry;
-use rust_s3c2440_std::system::PCLK;
+use rust_s3c2440_std::system::clock::delay_ms;
 
 /// This is a very special binary application.
 /// This application uses the minimum abstractions provided by the library to test weather we
@@ -13,8 +14,8 @@ use rust_s3c2440_std::system::PCLK;
 #[entry(call_init = false)]
 fn main() -> ! {
     let builder = S3C2440UartControllerBuilder::uart_controller0(
-        PortHPin2::new().into_uart_transmit(),
-        PortHPin3::new().into_uart_receive(),
+        PortHPin2::init().into_uart_transmit(),
+        PortHPin3::init().into_uart_receive(),
     );
 
     let controller = builder.build_fifo::<PCLK, 115200>();
@@ -24,5 +25,7 @@ fn main() -> ! {
         nop();
     }
 
-    loop {}
+    loop {
+        delay_ms(1000);
+    }
 }

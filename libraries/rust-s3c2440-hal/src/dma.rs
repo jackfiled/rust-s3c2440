@@ -160,7 +160,7 @@ impl Deref for DmaHandler<'_> {
     type Target = DmaController;
 
     fn deref(&self) -> &Self::Target {
-        &self.controller
+        self.controller
     }
 }
 
@@ -241,13 +241,11 @@ impl DmaController {
     }
 
     fn configure_channel(mode: DmaTriggerMode, config: DmaConfig, id: usize) -> DmaController {
-        let controller = DmaController {
+        DmaController {
             inner: (DMA_CONTROLLER_BASE_ADDRESS + DMA_CONTROLLER_OFFSET * id)
                 as *const DmaControllerInner,
             trigger_mode: mode,
             dma_config: config,
-        };
-
-        controller
+        }
     }
 }

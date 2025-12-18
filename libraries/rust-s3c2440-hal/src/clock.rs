@@ -1,28 +1,11 @@
+use crate::s3c2440::CLOCK_CONTROLLER;
+use crate::singleton;
 use crate::utils::Register;
 use bitflags::bitflags;
 use core::ops::Deref;
 
-#[repr(C)]
-pub struct ClockControllerInner {
-    clock_register: Register,
-    slow_clock_register: Register,
-}
-
-impl ClockControllerInner {
-    #[inline]
-    pub fn open_clock(&self, clock: ClockStatus) {
-        self.clock_register
-            .write(self.clock_register.read() | clock.bits());
-    }
-
-    #[inline]
-    pub fn close_clock(&self, clock: ClockStatus) {
-        self.clock_register
-            .write(self.clock_register.read() & (!clock.bits()));
-    }
-}
-
 bitflags! {
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct ClockStatus : u32 {
         const AC97 = 1 << 20;
         const Camera = 1 << 19;
@@ -47,6 +30,59 @@ bitflags! {
     }
 }
 
+#[repr(C)]
+pub struct ClockControllerInner {
+    clock_register: Register,
+    slow_clock_register: Register,
+}
+
+pub struct ClockToken {
+    released: bool,
+    clock: ClockStatus,
+}
+
+impl ClockToken {
+    pub fn release(mut self) {
+        self.do_release()
+    }
+
+    pub fn status(&self) -> &ClockStatus {
+        &self.clock
+    }
+
+    fn do_release(&mut self) {
+        if !self.released {
+            let controller = ClockController::new();
+            controller.close_clock(self.clock)
+        }
+    }
+}
+
+impl Drop for ClockToken {
+    fn drop(&mut self) {
+        self.do_release();
+    }
+}
+
+impl ClockControllerInner {
+    #[inline]
+    pub fn open_clock(&self, clock: ClockStatus) -> ClockToken {
+        self.clock_register
+            .write(self.clock_register.read() | clock.bits());
+
+        ClockToken {
+            released: false,
+            clock,
+        }
+    }
+
+    #[inline]
+    fn close_clock(&self, clock: ClockStatus) {
+        self.clock_register
+            .write(self.clock_register.read() & (!clock.bits()));
+    }
+}
+
 pub struct ClockController {
     inner: *const ClockControllerInner,
 }
@@ -60,14 +96,18 @@ impl Deref for ClockController {
 }
 
 impl ClockController {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
-            inner: CLOCK_ADDRESS as *const ClockControllerInner,
+            inner: CLOCK_CONTROLLER as *const ClockControllerInner,
         }
     }
 }
 
-const CLOCK_ADDRESS: usize = 0x4C00_000C;
+/// Get the mutable clock controller.
+/// Only called once.
+pub fn get_clock_controller() -> &'static mut ClockController {
+    singleton!(:ClockController = ClockController::new()).unwrap()
+}
 
 #[cfg(test)]
 mod tests {

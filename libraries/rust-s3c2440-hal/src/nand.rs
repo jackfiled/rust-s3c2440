@@ -1,4 +1,5 @@
 use crate::nop;
+use crate::s3c2440::NAND_CONTROLLER;
 use crate::utils::Register;
 use bitflags::bitflags;
 use core::error::Error;
@@ -58,13 +59,11 @@ impl NandFlashControllerInner {
         self.write_address(0x00);
 
         let mut device_id = (self.read_data() as u16) << 8;
-        device_id = device_id | (self.read_data() as u16);
+        device_id |= self.read_data() as u16;
         drop(select);
         device_id
     }
 }
-
-const NAND_CONTROLLER: usize = 0x4E00_0000;
 
 pub struct NandFlashControllerBuilder {
     inner: *const NandFlashControllerInner,
@@ -83,7 +82,7 @@ impl NandFlashControllerBuilder {
         // CONF[0] controls the bus width. 0 mens 8 bit and 1 means 16 bits.
         inner_ref
             .configure_register
-            .write((1 << 12) | (4 << 8) | (1 << 4) | 0);
+            .write((1 << 12) | (4 << 8) | (1 << 4));
 
         // Configure the controller register.
         // Lazy to write, refer the document.
@@ -498,12 +497,10 @@ impl NandFlashController {
 
         while left > 0 {
             // First check whether meeting bad block.
-            if address.is_block_aligned() {
-                if self.is_bad_block(address) {
-                    // Skip this block.
-                    address += Self::BLOCK_SIZE;
-                    continue;
-                }
+            if address.is_block_aligned() && self.is_bad_block(address) {
+                // Skip this block.
+                address += Self::BLOCK_SIZE;
+                continue;
             }
 
             // Then read the data.
@@ -544,12 +541,10 @@ impl NandFlashController {
 
         while left > 0 {
             // First check whether meeting bad block.
-            if address.is_block_aligned() {
-                if self.is_bad_block(address) {
-                    // Skip this block.
-                    address += Self::BLOCK_SIZE;
-                    continue;
-                }
+            if address.is_block_aligned() && self.is_bad_block(address) {
+                // Skip this block.
+                address += Self::BLOCK_SIZE;
+                continue;
             }
 
             // Then read the data.

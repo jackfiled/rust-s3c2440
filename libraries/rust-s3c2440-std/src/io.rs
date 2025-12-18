@@ -1,9 +1,9 @@
-use crate::system::PCLK;
 use core::cell::UnsafeCell;
 use core::fmt::{Display, Formatter, Write};
 use core::mem::MaybeUninit;
 use rust_s3c2440_hal::gpio::{PortHPin2, PortHPin3};
 use rust_s3c2440_hal::nop;
+use rust_s3c2440_hal::s3c2440::PCLK;
 use rust_s3c2440_hal::uart::{
     S3C2440UartController, S3C2440UartControllerBuilder, UartFifoOperation, UartOperation,
 };
@@ -74,6 +74,7 @@ impl GlobalConsole {
         Self(UnsafeCell::new(MaybeUninit::uninit()))
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn console(&self) -> &mut S3C2440Console<UartFifoOperation<0>> {
         unsafe { &mut (*((*self.0.get()).as_mut_ptr())) }
     }
@@ -83,8 +84,8 @@ pub static CONSOLE: GlobalConsole = GlobalConsole::new();
 
 pub fn initialize_console() {
     let builder = S3C2440UartControllerBuilder::uart_controller0(
-        PortHPin2::new().into_uart_transmit(),
-        PortHPin3::new().into_uart_receive(),
+        PortHPin2::init().into_uart_transmit(),
+        PortHPin3::init().into_uart_receive(),
     );
 
     let controller = builder.build_fifo::<PCLK, 115200>();

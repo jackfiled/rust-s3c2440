@@ -1,9 +1,10 @@
-use crate::clock::{ClockController, ClockStatus};
+use crate::clock::{ClockStatus, ClockToken};
 use crate::gpio::{
     CodecClock, IisClock, IisLrSelect, IisSerialDataInput, IisSerialDataOutput, PortEPin0,
     PortEPin1, PortEPin2, PortEPin3, PortEPin4,
 };
 use crate::nop;
+use crate::s3c2440::IIS_CONTROLLER;
 use crate::utils::{BitValue, Register};
 use core::ops::Deref;
 use log::info;
@@ -98,8 +99,6 @@ pub struct IisControllerInner {
     fifo_control_register: Register,
     fifo_data_register: Register,
 }
-
-const IIS_CONTROLLER_REGISTER: usize = 0x5500_0000;
 
 /// The configuration of IIS bus.
 pub struct IisConfig {
@@ -210,9 +209,6 @@ impl IisHandler<'_> {
         // Clear all control registers.
         self.controller.control_register.write(0);
         self.controller.fifo_control_register.write(0);
-        self.controller
-            .clock_controller
-            .close_clock(ClockStatus::IIS);
     }
 
     #[inline]
@@ -226,13 +222,6 @@ impl IisHandler<'_> {
     }
 
     pub fn list_registers(&self) {
-        [
-            self.controller.pre_scaler_register.read(),
-            self.controller.mode_register.read(),
-            self.controller.control_register.read(),
-            self.controller.fifo_control_register.read(),
-        ];
-
         info!(
             "IIS pre scaler register = 0x{:x}",
             self.controller.pre_scaler_register.read()
@@ -254,7 +243,7 @@ impl IisHandler<'_> {
 
 pub struct IisController {
     inner: *const IisControllerInner,
-    clock_controller: ClockController,
+    clock_token: ClockToken,
 }
 
 impl Deref for IisController {
@@ -267,28 +256,30 @@ impl Deref for IisController {
 
 impl IisController {
     pub fn new(
-        clock_controller: ClockController,
         _: PortEPin0<IisLrSelect>,
         _: PortEPin1<IisClock>,
         _: PortEPin2<CodecClock>,
         _: PortEPin3<IisSerialDataInput>,
         _: PortEPin4<IisSerialDataOutput>,
+        token: ClockToken,
     ) -> Self {
+        assert_eq!(&ClockStatus::IIS, token.status());
+
         Self {
-            inner: IIS_CONTROLLER_REGISTER as *const IisControllerInner,
-            clock_controller,
+            inner: IIS_CONTROLLER as *const IisControllerInner,
+            clock_token: token,
         }
     }
 
     pub fn configure(&self, config: &IisConfig, clock: u32) -> IisHandler<'_> {
-        // Enable the IIS clock.
-        self.clock_controller.open_clock(ClockStatus::IIS);
-
         let (kind, divider) = config.select_codec_clock_and_prescaler(clock);
         self.pre_scaler_register.write(divider << 5 | divider);
 
+        // For control register
+        // Let Rx/Tx idle if not needed.
+        // Turn on the prescaler.
         let mut control_mode =
-            0 | (!config.enable_send).value() << 3 | (!config.enable_receive).value() << 2 | 1 << 1; // Enable prescaler.
+            (!config.enable_send).value() << 3 | (!config.enable_receive).value() << 2 | 1 << 1;
 
         if config.enable_dma {
             control_mode =
@@ -296,11 +287,10 @@ impl IisController {
         }
         self.control_register.write(control_mode);
 
-        let iis_mode = (0 << 9) // Use PCLK as input clock.
-            | (0 << 8) // Master mode.
-            | config.enable_send.value() << 7
+        // mode[9]: 0 Use PCLK; mode[8]: 0 Work on master mode.
+        // mode[5]: 0 Master mode
+        let iis_mode = config.enable_send.value() << 7
             | config.enable_receive.value() << 6
-            | 0 << 5 // Master mode.
             | config.enable_msb_format.value() << 4 // 0 -> IIS format, 1 -> MBS format.
             | match config.bits_per_sample {
             8 => 0 << 3,

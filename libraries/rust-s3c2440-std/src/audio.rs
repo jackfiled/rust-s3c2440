@@ -1,10 +1,9 @@
-use crate::MANAGER;
-use crate::system::PCLK;
+use crate::system::register_interrupt;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use log::info;
-use rust_s3c2440_hal::clock::ClockController;
+use rust_s3c2440_hal::clock::ClockToken;
 use rust_s3c2440_hal::dma::{
     DmaChannel2Function, DmaConfig, DmaController, DmaMode, DmaServeMode, DmaSize, MemoryLocation,
 };
@@ -14,6 +13,7 @@ use rust_s3c2440_hal::gpio::{
 use rust_s3c2440_hal::iis::{IisConfig, IisController, IisHandler};
 use rust_s3c2440_hal::interrupt::InterruptSource;
 use rust_s3c2440_hal::l3bus::{CodecClockKind, DataInputFormat, L3BusController};
+use rust_s3c2440_hal::s3c2440::PCLK;
 
 pub struct AudioPlayer {
     l3_bus: L3BusController,
@@ -42,16 +42,16 @@ pub struct AudioDmaCallback {
 }
 
 impl AudioPlayer {
-    pub fn new() -> Self {
+    pub fn new(clock_token: ClockToken) -> Self {
         Self {
-            l3_bus: L3BusController::new(PortBPin2::new(), PortBPin3::new(), PortBPin4::new()),
+            l3_bus: L3BusController::new(PortBPin2::init(), PortBPin3::init(), PortBPin4::init()),
             iis_controller: IisController::new(
-                ClockController::new(),
-                PortEPin0::new().into_iis_select(),
-                PortEPin1::new().into_iis_clock(),
-                PortEPin2::new().into_iis_codec_clock(),
-                PortEPin3::new().into_iis_input(),
-                PortEPin4::new().into_iis_output(),
+                PortEPin0::init().into_iis_select(),
+                PortEPin1::init().into_iis_clock(),
+                PortEPin2::init().into_iis_codec_clock(),
+                PortEPin3::init().into_iis_input(),
+                PortEPin4::init().into_iis_output(),
+                clock_token,
             ),
         }
     }
@@ -107,33 +107,28 @@ impl AudioPlayer {
             dma_channel: dma_channel.clone(),
         }));
         let fifo_address = self.iis_controller.fifo_address();
-        MANAGER
-            .get()
-            .unwrap()
-            .interrupt()
-            .borrow_mut()
-            .register_interrupt_handler(
-                InterruptSource::Dma2,
-                Box::new(move || {
-                    let current_pos = callback.borrow().pos;
-                    // The printing in handler may cause to music stuttering.
-                    // info!(
-                    //     "Interrupt triggered, sending buffer [{}..{}].",
-                    //     current_pos,
-                    //     current_pos + BUFFER_SIZE
-                    // );
-                    let next_data_address = (&callback.borrow().data_buffer
-                        [current_pos..current_pos + BUFFER_SIZE])
-                        .as_ptr() as usize;
-                    callback.borrow_mut().dma_channel.borrow_mut().start_dma(
-                        next_data_address,
-                        fifo_address,
-                        DmaSize::B16,
-                        BUFFER_SIZE as u32 / 2,
-                    );
-                    callback.borrow_mut().pos += BUFFER_SIZE;
-                }),
-            );
+        register_interrupt(
+            InterruptSource::Dma2,
+            Box::new(move || {
+                let current_pos = callback.borrow().pos;
+                // The printing in handler may cause to music stuttering.
+                // info!(
+                //     "Interrupt triggered, sending buffer [{}..{}].",
+                //     current_pos,
+                //     current_pos + BUFFER_SIZE
+                // );
+                let next_data_address = callback.borrow().data_buffer
+                    [current_pos..current_pos + BUFFER_SIZE]
+                    .as_ptr() as usize;
+                callback.borrow_mut().dma_channel.borrow_mut().start_dma(
+                    next_data_address,
+                    fifo_address,
+                    DmaSize::B16,
+                    BUFFER_SIZE as u32 / 2,
+                );
+                callback.borrow_mut().pos += BUFFER_SIZE;
+            }),
+        );
 
         // 4. Configure the IIS controller.
         let iis_handler = self.iis_controller.configure(&iis_config, PCLK);

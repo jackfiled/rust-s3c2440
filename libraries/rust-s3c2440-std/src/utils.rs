@@ -28,6 +28,15 @@ impl InterruptGuard {
             fast_interrupt_enabled,
         }
     }
+
+    pub fn with_disabled<F>(f: F)
+    where
+        F: FnOnce(),
+    {
+        let guard = Self::new();
+        f();
+        drop(guard);
+    }
 }
 
 impl Drop for InterruptGuard {
@@ -43,6 +52,12 @@ impl Drop for InterruptGuard {
         }
 
         cpsr.write_cpsr();
+    }
+}
+
+impl Default for InterruptGuard {
+    fn default() -> Self {
+        InterruptGuard::new()
     }
 }
 

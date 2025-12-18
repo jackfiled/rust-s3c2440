@@ -2,6 +2,7 @@
 #![no_main]
 
 use rust_s3c2440_hal::nand::{NandFlashController, NandFlashControllerBuilder};
+use rust_s3c2440_std::system::clock::delay_ms;
 use rust_s3c2440_std::{entry, println};
 
 #[entry]
@@ -28,10 +29,7 @@ fn main() -> ! {
     println!("Reading block...");
     let mut buffer = [0u8; DATA.len()];
 
-    if controller.read(address, &mut buffer).is_err() {
-        println!("Failed to read!");
-        loop {}
-    }
+    controller.read(address, &mut buffer).unwrap();
 
     match core::str::from_utf8(&buffer) {
         Ok(s) => {
@@ -42,5 +40,7 @@ fn main() -> ! {
         }
     }
 
-    loop {}
+    loop {
+        delay_ms(1000);
+    }
 }

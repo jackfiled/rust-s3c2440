@@ -2,6 +2,7 @@
 #![no_main]
 extern crate alloc;
 
+use rust_s3c2440_hal::clock::{ClockStatus, get_clock_controller};
 use rust_s3c2440_std::audio::AudioPlayer;
 use rust_s3c2440_std::io::get_char;
 use rust_s3c2440_std::system::clock::delay_ms;
@@ -20,7 +21,9 @@ fn main() -> ! {
         "The base address of wav file is 0x{:x}.",
         wav_file.as_ptr() as usize
     );
-    let mut player = AudioPlayer::new();
+    let clock_controller = get_clock_controller();
+    let iis_token = clock_controller.open_clock(ClockStatus::IIS);
+    let mut player = AudioPlayer::new(iis_token);
 
     let _ = player.play_wav(wav_file);
 

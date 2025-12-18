@@ -1,5 +1,10 @@
+// Make unit tests available.
 #![cfg_attr(not(test), no_std)]
+// Lint configurations
 #![allow(dead_code)]
+#![allow(asm_sub_register)]
+#![allow(static_mut_refs)]
+#![allow(clippy::missing_safety_doc)]
 
 use core::arch::asm;
 
@@ -14,8 +19,7 @@ pub mod s3c2440;
 pub mod uart;
 pub mod utils;
 
-pub use utils::Global;
-
+/// The no-op assembly function to prevent the compiler to optimize.
 #[inline(always)]
 pub fn nop() {
     unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) }

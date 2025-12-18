@@ -201,6 +201,7 @@ impl<'a> L3StatusMode<'a> {
         self.halt = true;
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn control_group1(
         &mut self,
         output_gain: bool,

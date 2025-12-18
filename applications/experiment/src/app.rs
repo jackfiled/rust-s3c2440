@@ -1,4 +1,5 @@
 use alloc::string::ToString;
+use rust_s3c2440_hal::clock::{ClockStatus, get_clock_controller};
 use rust_s3c2440_hal::nand::{NandFlashController, NandFlashControllerBuilder};
 use rust_s3c2440_std::audio::AudioPlayer;
 use rust_s3c2440_std::io::get_char;
@@ -84,10 +85,7 @@ impl App {
         println!("Reading block...");
         let mut buffer = [0u8; DATA.len()];
 
-        if controller.read(address, &mut buffer).is_err() {
-            println!("Failed to read!");
-            loop {}
-        }
+        controller.read(address, &mut buffer).unwrap();
 
         match core::str::from_utf8(&buffer) {
             Ok(s) => {
@@ -108,7 +106,9 @@ impl App {
             "The base address of wav file: 0x{:x}.",
             wav_file.as_ptr() as usize
         );
-        let mut player = AudioPlayer::new();
+        let clock_controller = get_clock_controller();
+        let token = clock_controller.open_clock(ClockStatus::IIS);
+        let mut player = AudioPlayer::new(token);
 
         let _ = player.play_wav(wav_file);
 

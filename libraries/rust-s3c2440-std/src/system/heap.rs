@@ -24,6 +24,7 @@ impl UnsafeHeap {
         Self(UnsafeCell::new(Heap::empty()))
     }
 
+    #[allow(clippy::mut_from_ref)]
     fn heap(&self) -> &mut Heap<BUDDY_MAX_ORDER> {
         unsafe { &mut (*self.0.get()) }
     }

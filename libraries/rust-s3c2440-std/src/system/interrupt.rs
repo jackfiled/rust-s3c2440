@@ -1,11 +1,11 @@
-use crate::MANAGER;
 use crate::system::stack::STACK_SIZE;
-use crate::system::{StatusRegister, read_cpsr, read_spsr};
+use crate::system::{StatusRegister, get_manager, read_cpsr, read_spsr};
 use alloc::boxed::Box;
 use core::arch::{asm, naked_asm};
 use core::ops::{Deref, DerefMut};
 use log::debug;
-use rust_s3c2440_hal::interrupt::{InterruptController, InterruptSource};
+use rust_s3c2440_hal::interrupt::{InterruptController, InterruptSource, get_interrupt_controller};
+use rust_s3c2440_hal::s3c2440::CpuMode;
 use rust_s3c2440_hal::utils::Register;
 
 const INTERRUPT_VECTOR_BASE_ADDRESS: usize = 0x3000_0100;
@@ -23,22 +23,22 @@ struct InterruptVector {
 
 pub struct InterruptManager {
     vector: *const InterruptVector,
-    controller: InterruptController,
-    software_interrupt_handler: Box<dyn Fn() -> ()>,
-    interrupt_handlers: [Box<dyn Fn() -> ()>; InterruptSource::INTERRUPT_SOURCE_COUNT],
+    controller: &'static mut InterruptController,
+    software_interrupt_handler: Box<dyn Fn()>,
+    interrupt_handlers: [Box<dyn Fn()>; InterruptSource::INTERRUPT_SOURCE_COUNT],
 }
 
 impl Deref for InterruptManager {
     type Target = InterruptController;
 
     fn deref(&self) -> &Self::Target {
-        &self.controller
+        self.controller
     }
 }
 
 impl DerefMut for InterruptManager {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.controller
+        self.controller
     }
 }
 
@@ -72,13 +72,13 @@ extern "C" fn set_interrupt_stack() {
         // Restore to original mode.
         "msr cpsr, r0",
         "mov pc, lr",
-        MODE_MASK = const rust_s3c2440_hal::s3c2440::CpuMode::MASK,
-        I_BIT = const crate::system::I_BIT,
-        IRQ_MODE = const rust_s3c2440_hal::s3c2440::CpuMode::Interrupt as u32,
+        MODE_MASK = const CpuMode::MASK,
+        I_BIT = const CpuMode::I_BIT,
+        IRQ_MODE = const CpuMode::Interrupt as u32,
         IRQ_STACK = sym crate::system::stack::TRAP_STACK,
         STACK_SIZE = const crate::system::stack::STACK_SIZE,
-        ABT_MODE = const rust_s3c2440_hal::s3c2440::CpuMode::Abort as u32,
-        UND_MODE = const rust_s3c2440_hal::s3c2440::CpuMode::Undefined as u32
+        ABT_MODE = const CpuMode::Abort as u32,
+        UND_MODE = const CpuMode::Undefined as u32
     );
 }
 
@@ -86,7 +86,7 @@ impl InterruptManager {
     pub fn new() -> Self {
         Self {
             vector: INTERRUPT_VECTOR_BASE_ADDRESS as *const InterruptVector,
-            controller: InterruptController::new(),
+            controller: get_interrupt_controller(),
             software_interrupt_handler: Self::empty_handler(),
             interrupt_handlers: core::array::from_fn(|_| Self::empty_handler()),
         }
@@ -143,15 +143,11 @@ impl InterruptManager {
         debug!("Interrupt has been enabled.");
     }
 
-    pub fn interrupt_handler(&self, source: InterruptSource) -> &Box<dyn Fn() -> ()> {
+    pub fn interrupt_handler(&self, source: InterruptSource) -> &dyn Fn() {
         &self.interrupt_handlers[usize::from(source)]
     }
 
-    pub fn register_interrupt_handler(
-        &mut self,
-        source: InterruptSource,
-        handler: Box<dyn Fn() -> ()>,
-    ) {
+    pub fn register_interrupt_handler(&mut self, source: InterruptSource, handler: Box<dyn Fn()>) {
         self.controller.enable_interrupt(source);
         self.interrupt_handlers[usize::from(source)] = handler;
     }
@@ -161,7 +157,7 @@ impl InterruptManager {
         self.interrupt_handlers[usize::from(source)] = Self::empty_handler();
     }
 
-    pub fn register_software_interrupt_handler(&mut self, handler: Box<dyn Fn() -> ()>) {
+    pub fn register_software_interrupt_handler(&mut self, handler: Box<dyn Fn()>) {
         self.software_interrupt_handler = handler;
     }
 
@@ -174,8 +170,14 @@ impl InterruptManager {
         unsafe { &(*self.vector) }
     }
 
-    fn empty_handler() -> Box<dyn Fn() -> ()> {
+    fn empty_handler() -> Box<dyn Fn()> {
         Box::new(|| {})
+    }
+}
+
+impl Default for InterruptManager {
+    fn default() -> Self {
+        InterruptManager::new()
     }
 }
 
@@ -232,7 +234,7 @@ unsafe extern "C" fn software_interrupt_entry() {
         // 5. Call back to the PC.
         // When software interrupt, just go to PC +4.
         "movs pc, r14",
-        I_BIT = const crate::system::I_BIT,
+        I_BIT = const CpuMode::I_BIT,
         TRAP_HANDLER = sym crate::system::interrupt::software_interrupt_handler
     )
 }
@@ -243,7 +245,7 @@ fn software_interrupt_handler(context: &TrapContext) {
         context.return_address()
     );
 
-    let manager = MANAGER.get().unwrap().interrupt();
+    let manager = get_manager().interrupt();
     (manager.borrow().software_interrupt_handler)();
 
     debug!("Software interrupt handled.");
@@ -275,7 +277,7 @@ unsafe extern "C" fn interrupt_entry() {
         // 5. Call back to the PC.
         // For interrupt, go to PC.
         "subs pc, lr, #4",
-        I_BIT = const crate::system::I_BIT,
+        I_BIT = const CpuMode::I_BIT,
         TRAP_HANDLER = sym crate::system::interrupt::interrupt_handler
     )
 }
@@ -290,7 +292,7 @@ fn interrupt_handler(context: &TrapContext) {
     let spsr = read_spsr();
     debug!("Original {}", spsr);
 
-    let manager = MANAGER.get().unwrap().interrupt();
+    let manager = get_manager().interrupt();
     let source = manager.borrow().read_handling();
     debug!("Encounter hardware interrupt: {}", source);
 
@@ -328,7 +330,7 @@ unsafe extern "C" fn undefined_exception_entry() {
         // 5. Call back to the PC.
         // For undefined, go to PC + 4.
         "movs pc, lr",
-        I_BIT = const crate::system::I_BIT,
+        I_BIT = const CpuMode::I_BIT,
         TRAP_HANDLER = sym crate::system::interrupt::undefined_exception_handler
     )
 }
@@ -370,7 +372,7 @@ unsafe extern "C" fn prefetch_exception_entry() {
         // 5. Call back to the PC.
         // For prefetch exception, go to PC.
         "subs pc, lr, #4",
-        I_BIT = const crate::system::I_BIT,
+        I_BIT = const CpuMode::I_BIT,
         TRAP_HANDLER = sym crate::system::interrupt::prefetch_exception_handler
     )
 }
@@ -412,7 +414,7 @@ unsafe extern "C" fn data_exception_entry() {
         // 5. Call back to the PC.
         // For data exception, go to PC - 4, which is the real data fetch instruction.
         "subs pc, lr, #8",
-        I_BIT = const crate::system::I_BIT,
+        I_BIT = const CpuMode::I_BIT,
         TRAP_HANDLER = sym crate::system::interrupt::data_exception_handler
     )
 }

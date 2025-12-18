@@ -1,4 +1,8 @@
+#![allow(clippy::identity_op)]
+
+use bitflags::bitflags;
 use core::fmt::{Display, Formatter};
+use seq_macro::seq;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -14,6 +18,14 @@ pub enum CpuMode {
 
 impl CpuMode {
     pub const MASK: u32 = 0b11111;
+
+    pub const I_BIT: u32 = 1 << 7;
+
+    pub const F_BIT: u32 = 1 << 6;
+
+    /// CPSR initial value.
+    /// Running on SVC mode, disable IRQ and IFQ.
+    pub const INITIAL_VALUE: u32 = Self::Management as u32 | Self::I_BIT | Self::F_BIT;
 }
 
 impl From<u32> for CpuMode {
@@ -38,32 +50,176 @@ impl Display for CpuMode {
             CpuMode::FastInterrupt => write!(f, "FIQ"),
             CpuMode::Interrupt => write!(f, "IRQ"),
             CpuMode::Management => write!(f, "SVC"),
-            CpuMode::Abort => write!(f, "abt"),
-            CpuMode::System => write!(f, "sys"),
-            CpuMode::Undefined => write!(f, "und"),
+            CpuMode::Abort => write!(f, "ABT"),
+            CpuMode::System => write!(f, "SYS"),
+            CpuMode::Undefined => write!(f, "UND"),
         }
     }
 }
 
+/// MMU configuration.
+/// PROG32 = 1 << 4, DATA32 = 1 << 5, L_ENANBLE = 1 << 6, ROM = 1 << 9 and W_ENABLE = 1 << 3.
+pub const MMU_INITIAL_VALUE: u32 = (1 << 4) | (1 << 5) | (1 << 6) | (1 << 9) | (1 << 3);
+pub const MMU_ASYNC: u32 = 3 << 30;
+
+pub const LOCAL_MEMORY_ADDRESS: usize = 0x3000_0000;
+pub const LOCAL_MEMORY_BUS_ADDRESS: usize = LOCAL_MEMORY_ADDRESS;
+pub const LOCAL_MEMORY_SIZE: usize = 0x0400_0000; // The memory size of s3c2440x is 64MB.
+pub const LOCAL_MEMORY_END_ADDRESS: usize = LOCAL_MEMORY_ADDRESS + LOCAL_MEMORY_SIZE;
+
+/// Base address used for interrupt vector table.
+/// Not known about its name meaning.
+pub const EXC_BASE_ADDRESS: usize = 0x3000_0100;
+
+bitflags! {
+    /// Boot mode of S3C2440.
+    #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+    pub struct BootMode: u32 {
+        const NORMAL = 0b000;
+        const NO_AUTO = 0b001;
+        const CLEAR = 0b010;
+        const QUICK_AUTO = 0b100;
+    }
+}
+
+pub const BUS_WIDTH_ADDRESS: usize = 0x4800_0000;
+seq!(N in 0..8 {
+    pub const BANK_ADDRESS~N: usize = BUS_WIDTH_ADDRESS + (N + 1) * 0x4;
+});
+
+pub const DW1: u32 = 2 << 4;
+pub const WS1: u32 = 0 << 6;
+pub const ST1: u32 = 0 << 7;
+pub const DW2: u32 = 1 << 8;
+pub const WS2: u32 = 0 << 10;
+pub const ST2: u32 = 0 << 11;
+pub const DW3: u32 = 1 << 12;
+pub const WS3: u32 = 0 << 14;
+pub const ST3: u32 = 0 << 15;
+pub const DW4: u32 = 2 << 16;
+pub const WS4: u32 = 0 << 18;
+pub const ST4: u32 = 0 << 19;
+pub const DW5: u32 = 1 << 20;
+pub const WS5: u32 = 0 << 22;
+pub const ST5: u32 = 0 << 23;
+pub const DW6: u32 = 2 << 24;
+pub const WS6: u32 = 0 << 26;
+pub const ST6: u32 = 0 << 27;
+pub const DW7: u32 = 2 << 28;
+pub const WS7: u32 = 0 << 30;
+pub const ST7: u32 = 0 << 31;
+pub const BUS_WIDTH_INITIAL_VALUE: u32 = DW1
+    + WS1
+    + ST1
+    + DW2
+    + WS2
+    + ST2
+    + DW3
+    + WS3
+    + ST3
+    + DW4
+    + WS4
+    + ST4
+    + DW5
+    + WS5
+    + ST5
+    + DW6
+    + WS6
+    + ST6
+    + DW7
+    + WS7
+    + ST7;
+
+pub const BANK6_INITIAL_VALUE: u32 =
+    (1 << 0) + (1 << 2) + (0 << 4) + (0 << 6) + (0 << 8) + (0 << 11) + (0 << 13) + (3 << 15);
+
+pub const REFRESH_ADDRESS: usize = 0x4800_0024;
+pub const REFRESH_INITIAL_VALUE: u32 = 0x008E_0459;
+
+pub const BANKSIZE_ADDRESS: usize = 0x4800_0028;
+pub const BANKSIZE_INITIAL_VALUE: u32 = 0x32;
+
+pub const MRSRB6_ADDRESS: usize = 0x4800_002c;
+pub const MRSRB6_INITIAL_VALUE: u32 = 0x30;
+
+/// The base address of interrupt controller.
+pub const INTERRUPT_CONTROLLER: usize = 0x4A00_0000;
+/// The base address of interrupt mask register.
+pub const INTERRUPT_MASK_ADDRESS: usize = 0x4A00_0008;
+pub const INTERRUPT_SUBMASK_ADDRESS: usize = 0x4A00_001C;
+
+/// The base address of 4 DMA controllers.
+pub const DMA_CONTROLLER_BASE: usize = 0x4B00_0000;
+/// The offset between DMA controllers.
+pub const DMA_CONTROLLER_OFFSET: usize = 0x40;
+
+pub const LOCKTIME_ADDRESS: usize = 0x4C00_0000;
+
+/// The value in the reference code is setting LOCKTIME to 0x00FFFFFF, which is weird.
+pub const LOCKTIME_INITIAL_VALUE: u32 = (0xFFFF << 0) + (0x00FF << 16);
+
+pub const MPLL_ADDRESS: usize = 0x4C00_0004;
+
+/// The MPLLCON register will control the output clock of PLL.
+/// This register contains three parts: MDIV[19:12], PDIV[9:4] and SDIV[3:0].
+/// And the output clock will be calculated as follows:
+/// F_out = 2 * (MDIV + 8) * F_in / ((PDIV + 2) * 2^SDIV)
+/// And for this tq2440 board, the input clock is 12MHz, so the output clock will be
+/// F_out = 2 * (97 + 8) * 12 / (3 * 2^2) = 210MHz
+pub const MPLL_INITIAL_VALUE: u32 = 0x61012;
+
+/// The base address of clock controller.
+pub const CLOCK_CONTROLLER: usize = 0x4C00_000C;
+
+pub const CLOCK_INITIAL_VALUE: u32 = 0x00043D10;
+
+pub const SLOW_CLOCK_ADDRESS: usize = 0x4C00_0010;
+
+pub const SLOW_CLOCK_INITIAL_VALUE: u32 = 0x0000_0084;
+
+pub const CLOCK_DIV_ADDRESS: usize = 0x4C00_0014;
+
+pub const CLOCK_DIV_INITIAL_VALUE: u32 = 0x3;
+
+/// The base address of NAND controller.
+pub const NAND_CONTROLLER: usize = 0x4E00_0000;
+
 /// The base address of 3 UART controllers.
 pub const UART_CONTROLLER_BASE: usize = 0x5000_0000;
 /// The delta between UART controllers.
-pub const UART_CONTROLLER_DELTA: usize = 0x4000;
+pub const UART_CONTROLLER_OFFSET: usize = 0x4000;
 
-pub const GPACON: usize = 0x56000000; // Port A control
+pub const WATCHDOG_ADDRESS: usize = 0x53000000;
 
-pub const GPBCON: usize = 0x56000010; // Port B control
+pub const WATCHDOG_INITIAL_VALUE: u32 = 0x0;
 
-pub const GPCCON: usize = 0x56000020; // Port C control
+/// The base address of IIS controller.
+pub const IIS_CONTROLLER: usize = 0x5500_0000;
 
-pub const GPDCON: usize = 0x56000030; // Port D control
+/// GPIO Port A controller address.
+pub const GPACON: usize = 0x56000000;
+/// GPIO Port B controller address.
+pub const GPBCON: usize = 0x56000010;
+/// GPIO Port C controller address.
+pub const GPCCON: usize = 0x56000020;
+/// GPIO Port D controller address.
+pub const GPDCON: usize = 0x56000030;
+/// GPIO Port E controller address.
+pub const GPECON: usize = 0x56000040;
+/// GPIO Port F controller address.
+pub const GPFCON: usize = 0x56000050;
+/// GPIO Port G controller address.
+pub const GPGCON: usize = 0x56000060;
+/// GPIO Port H controller address.
+pub const GPHCON: usize = 0x56000070;
+/// GPIO Port J controller address.
+pub const GPJCON: usize = 0x560000d0;
 
-pub const GPECON: usize = 0x56000040; // Port E control
-
-pub const GPFCON: usize = 0x56000050; // Port F control
-
-pub const GPGCON: usize = 0x56000060; // Port G control
-
-pub const GPHCON: usize = 0x56000070; // Port H control
-
-pub const GPJCON: usize = 0x560000d0; // Port J control
+/// Below three clocks are generated by clock system.
+///
+/// FCLK = 210MHz.
+pub const FCLK: u32 = 210_000_000;
+/// HCLK = 105MHz.
+pub const HCLK: u32 = 105_000_000;
+/// PCLK = 52.5MHz.
+pub const PCLK: u32 = 52_500_000;

@@ -98,13 +98,11 @@ seq!(N in 0..=22 {
 
     impl PortAPin~N<Output<PushPull>> {
         pub fn init() -> Self {
-            gpio_port_controller(Port::A)
-                .control_register
-                .set_bit(0, N, 1);
-            gpio_port_controller(Port::A)
-                .pull_up_register
-                .set_bit(1, N, 1);
-            Self { _p: PhantomData }
+            let port = Self {
+                _p: PhantomData
+            };
+
+            port.into_output()
         }
     }
 
@@ -126,6 +124,7 @@ seq!(N in 0..=22 {
 /// - 2 bits of control_register controls one pin, and b00 means input, b01 means output.
 /// - 1 bit of pull_up_register controls one pin, and 0 means enabling, 1 means disabling.
 /// - 1 bit of data_register controls one pin, and 0 means off, 1 means on.
+///
 /// The macro accept three parameters:
 /// - port_name: the uppercase port name, used in port name and Port enumeration.
 /// - lower_port_name: the lowercase port name, used to get the `port_` function of controller.
@@ -243,7 +242,7 @@ macro_rules! impl_port_pin {
                 }
 
                 impl [<Port $port_name Pin>]~N<Output<PushPull>> {
-                    pub fn new() -> Self {
+                    pub fn init() -> Self {
                         let t = Self {
                             _p: PhantomData
                         };

@@ -49,7 +49,7 @@ impl Register {
         let origin = self.read();
 
         // Remove the target bits with a mask.
-        let mask = (1u32 << width - 1) << offset;
+        let mask = ((1u32 << width) - 1) << offset;
         let mut result = origin & !mask;
 
         if value != 0 {
@@ -83,52 +83,6 @@ impl BitOrAssign<u32> for Register {
     }
 }
 
-/// A global variable container with initialize-once guaranteed.
-pub struct Global<T> {
-    initialized: UnsafeCell<bool>,
-    value: UnsafeCell<core::mem::MaybeUninit<T>>,
-}
-
-// Only safety under single-core system and should be initialized under interrupt disabled context.
-unsafe impl<T> Sync for Global<T> {}
-
-impl<T> Global<T> {
-    pub const fn new() -> Self {
-        Self {
-            initialized: UnsafeCell::new(false),
-            value: UnsafeCell::new(core::mem::MaybeUninit::uninit()),
-        }
-    }
-
-    pub fn init(&self, val: T) {
-        unsafe {
-            let init_ptr = self.initialized.get();
-            if !(*init_ptr) {
-                ptr::write(self.value.get() as *mut T, val);
-                *init_ptr = true;
-            } else {
-                if cfg!(debug_assertions) {
-                    panic!("Global::init called twice!");
-                }
-            }
-        }
-    }
-
-    pub fn get(&self) -> Option<&T> {
-        unsafe {
-            if *self.initialized.get() {
-                Some(&*(self.value.get() as *const T))
-            } else {
-                None
-            }
-        }
-    }
-
-    pub unsafe fn get_unchecked(&self) -> &T {
-        unsafe { &*(self.value.get() as *const T) }
-    }
-}
-
 pub trait BitValue {
     fn value(&self) -> u32;
 }
@@ -140,6 +94,80 @@ impl BitValue for bool {
             false => 0,
         }
     }
+}
+
+pub fn empty_wrapper<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    f()
+}
+
+/// Macro to create a mutable reference to a statically allocated value
+///
+/// This macro returns a value with type `Option<&'static mut $ty>`. `Some($expr)` will be returned
+/// the first time the macro is executed; further calls will return `None`. To avoid `unwrap`ping a
+/// `None` variant the caller must ensure that the macro is called from a function that's executed
+/// at most once in the whole lifetime of the program.
+///
+/// # Notes
+/// This macro is unsound on multi cores systems.
+///
+/// For debuggability, you can set an explicit name for a singleton.  This name only shows up the
+/// debugger and is not referencable from other code.  See example below.
+///
+/// # Example
+///
+/// ``` no_run
+/// use cortex_m::singleton;
+///
+/// fn main() {
+///     // OK if `main` is executed only once
+///     let x: &'static mut bool = singleton!(: bool = false).unwrap();
+///
+///     let y = alias();
+///     // BAD this second call to `alias` will definitively `panic!`
+///     let y_alias = alias();
+/// }
+///
+/// fn alias() -> &'static mut bool {
+///     singleton!(: bool = false).unwrap()
+/// }
+///
+/// fn singleton_with_name() {
+///     // A name only for debugging purposes
+///     singleton!(FOO_BUFFER: [u8; 1024] = [0u8; 1024]);
+/// }
+/// ```
+#[macro_export]
+macro_rules! singleton {
+    ($name:ident: $ty:ty = $expr:expr) => {
+        $crate::utils::empty_wrapper(|| {
+            // this is a tuple of a MaybeUninit and a bool because using an Option here is
+            // problematic:  Due to niche-optimization, an Option could end up producing a non-zero
+            // initializer value which would move the entire static from `.bss` into `.data`.
+            static mut $name: (::core::mem::MaybeUninit<$ty>, bool) = (::core::mem::MaybeUninit::uninit(), false);
+
+            #[allow(unsafe_code)]
+            let used = unsafe { $name.1 };
+            if used {
+                None
+            } else {
+                let expr = $expr;
+
+                #[allow(unsafe_code)]
+                unsafe {
+                    $name.1 = true;
+                    $name.0 = ::core::mem::MaybeUninit::new(expr);
+                    Some(&mut *$name.0.as_mut_ptr())
+                }
+            }
+        })
+
+    };
+    (: $ty:ty = $expr:expr) => {
+        $crate::singleton!(VAR: $ty = $expr)
+    };
 }
 
 #[cfg(test)]

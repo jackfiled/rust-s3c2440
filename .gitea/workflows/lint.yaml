@@ -11,12 +11,14 @@ jobs:
           export RUSTUP_UPDATE_ROOT=https://mirrors.cernet.edu.cn/rustup/rustup
           export RUSTUP_DIST_SERVER=https://mirrors.cernet.edu.cn/rustup
           rustup toolchain install nightly
-          rustup component add rust-src
+          rustup component add rust-src clippy
       - name: Run format check
         run: cargo fmt --check
-      - name: Run lint on each application
+      - name: Create wav file to let lint compile
         run: |
-          cd applications/uart-test
-          cargo check
-          cd ../flash-reader
-          cargo check
+          touch applications/audio-test/src/t1_big_endian.wav
+          touch applications/experiment/src/t1.wav
+      - name: Run cargo-check lint
+        run: cargo check -Zbuild-std=core,alloc --target armv4t-none-eabi
+      - name: RunA cargo-clippy lint
+        run: cargo clippy -Zbuild-std=core,alloc --target armv4t-none-eabi

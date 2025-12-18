@@ -2,7 +2,7 @@ use crate::delay_cycles;
 use crate::gpio::{
     PortHPin2, PortHPin3, PortHPin4, PortHPin5, PortHPin6, PortHPin7, UartReceive, UartTransmit,
 };
-use crate::s3c2440::{UART_CONTROLLER_BASE, UART_CONTROLLER_DELTA};
+use crate::s3c2440::{UART_CONTROLLER_BASE, UART_CONTROLLER_OFFSET};
 use crate::uart::sealed::Sealed;
 use crate::utils::Register;
 use bitflags::bitflags;
@@ -126,7 +126,7 @@ pub struct S3C2440UartControllerInner {
 
 const fn uart_inner(n: usize) -> &'static S3C2440UartControllerInner {
     let inner =
-        (UART_CONTROLLER_BASE + n * UART_CONTROLLER_DELTA) as *const S3C2440UartControllerInner;
+        (UART_CONTROLLER_BASE + n * UART_CONTROLLER_OFFSET) as *const S3C2440UartControllerInner;
 
     unsafe { &(*inner) }
 }
@@ -215,13 +215,15 @@ impl<const N: usize> Default for UartNonFifoOperation<N> {
 impl<const N: usize> UartOperation for UartNonFifoOperation<N> {
     fn try_read(&self, buffer: &mut [u8]) -> usize {
         let mut count = 0;
-        for i in 0..buffer.len() {
+        for i in buffer.iter_mut() {
             if !self.is_receive_buffer_ready() {
                 break;
             }
 
-            buffer[i] = self.receive_buffer.read() as u8;
+            *i = self.receive_buffer.read() as u8;
             // There are error FIFO, so always reading the error status register.
+            // But working on non-FIFO mode, so just ignore it.
+            // self.read_error();
             count += 1;
         }
 

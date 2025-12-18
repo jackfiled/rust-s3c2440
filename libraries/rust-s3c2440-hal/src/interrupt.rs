@@ -1,3 +1,5 @@
+use crate::s3c2440::INTERRUPT_CONTROLLER;
+use crate::singleton;
 use crate::utils::Register;
 use core::fmt;
 use core::ops::Deref;
@@ -210,6 +212,25 @@ pub enum InterruptSource {
 impl InterruptSource {
     pub const INTERRUPT_SOURCE_COUNT: usize = 41;
 
+    fn uart_source_map(
+        source: &UartInterruptSource,
+    ) -> (InterruptSourceInner, Option<InterruptSubSourceInner>) {
+        match source {
+            UartInterruptSource::Receive => (
+                InterruptSourceInner::Uart2,
+                Some(InterruptSubSourceInner::Uart2Receive),
+            ),
+            UartInterruptSource::Send => (
+                InterruptSourceInner::Uart2,
+                Some(InterruptSubSourceInner::Uart2Send),
+            ),
+            UartInterruptSource::Error => (
+                InterruptSourceInner::Uart2,
+                Some(InterruptSubSourceInner::Uart2Error),
+            ),
+        }
+    }
+
     fn inner_map(&self) -> (InterruptSourceInner, Option<InterruptSubSourceInner>) {
         match self {
             InterruptSource::External0 => (InterruptSourceInner::External0, None),
@@ -245,20 +266,7 @@ impl InterruptSource {
             InterruptSource::Timer2 => (InterruptSourceInner::Timer2, None),
             InterruptSource::Timer3 => (InterruptSourceInner::Timer3, None),
             InterruptSource::Timer4 => (InterruptSourceInner::Timer4, None),
-            InterruptSource::Uart2(u) => match u {
-                UartInterruptSource::Receive => (
-                    InterruptSourceInner::Uart2,
-                    Some(InterruptSubSourceInner::Uart2Receive),
-                ),
-                UartInterruptSource::Send => (
-                    InterruptSourceInner::Uart2,
-                    Some(InterruptSubSourceInner::Uart2Send),
-                ),
-                UartInterruptSource::Error => (
-                    InterruptSourceInner::Uart2,
-                    Some(InterruptSubSourceInner::Uart2Error),
-                ),
-            },
+            InterruptSource::Uart2(u) => Self::uart_source_map(u),
             InterruptSource::Lcd => (InterruptSourceInner::Lcd, None),
             InterruptSource::Dma0 => (InterruptSourceInner::Dma0, None),
             InterruptSource::Dma1 => (InterruptSourceInner::Dma1, None),
@@ -266,38 +274,12 @@ impl InterruptSource {
             InterruptSource::Dma3 => (InterruptSourceInner::Dma3, None),
             InterruptSource::Sdi => (InterruptSourceInner::Sdi, None),
             InterruptSource::Spi0 => (InterruptSourceInner::Spi0, None),
-            InterruptSource::Uart1(u) => match u {
-                UartInterruptSource::Receive => (
-                    InterruptSourceInner::Uart1,
-                    Some(InterruptSubSourceInner::Uart1Receive),
-                ),
-                UartInterruptSource::Send => (
-                    InterruptSourceInner::Uart1,
-                    Some(InterruptSubSourceInner::Uart1Send),
-                ),
-                UartInterruptSource::Error => (
-                    InterruptSourceInner::Uart1,
-                    Some(InterruptSubSourceInner::Uart1Error),
-                ),
-            },
+            InterruptSource::Uart1(u) => Self::uart_source_map(u),
             InterruptSource::NandFlash => (InterruptSourceInner::NandFlash, None),
             InterruptSource::UsbDevice => (InterruptSourceInner::UsbDevice, None),
             InterruptSource::UsbHost => (InterruptSourceInner::UsbHost, None),
             InterruptSource::Iic => (InterruptSourceInner::Iic, None),
-            InterruptSource::Uart0(u) => match u {
-                UartInterruptSource::Receive => (
-                    InterruptSourceInner::Uart0,
-                    Some(InterruptSubSourceInner::Uart0Receive),
-                ),
-                UartInterruptSource::Send => (
-                    InterruptSourceInner::Uart0,
-                    Some(InterruptSubSourceInner::Uart0Send),
-                ),
-                UartInterruptSource::Error => (
-                    InterruptSourceInner::Uart0,
-                    Some(InterruptSubSourceInner::Uart0Error),
-                ),
-            },
+            InterruptSource::Uart0(u) => Self::uart_source_map(u),
             InterruptSource::Spi1 => (InterruptSourceInner::Spi1, None),
             InterruptSource::Rtc => (InterruptSourceInner::Rtc, None),
             InterruptSource::Adc(a) => match a {
@@ -422,8 +404,6 @@ pub struct InterruptControllerInner {
     sub_interrupt_mask: Register,
 }
 
-const INTERRUPT_CONTROLLER_BASE: usize = 0x4A00_0000;
-
 pub struct InterruptController {
     inner: *const InterruptControllerInner,
 }
@@ -437,9 +417,9 @@ impl Deref for InterruptController {
 }
 
 impl InterruptController {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let controller = Self {
-            inner: INTERRUPT_CONTROLLER_BASE as *const InterruptControllerInner,
+            inner: INTERRUPT_CONTROLLER as *const InterruptControllerInner,
         };
 
         // When initializing, disable all interrupts.
@@ -630,6 +610,10 @@ impl InterruptController {
         // Then clear the interrupt pending register.
         self.interrupt_pending.write(1 << s1 as u32);
     }
+}
+
+pub fn get_interrupt_controller() -> &'static mut InterruptController {
+    singleton!(: InterruptController = InterruptController::new()).unwrap()
 }
 
 #[cfg(test)]

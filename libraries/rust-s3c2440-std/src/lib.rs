@@ -1,10 +1,12 @@
 #![feature(alloc_error_handler)]
 #![no_std]
 #![no_main]
+// Lint configurations
 #![allow(dead_code)]
 #![allow(static_mut_refs)]
+#![allow(asm_sub_register)]
 
-use crate::manager::Manager;
+use crate::system::Manager;
 use core::panic::PanicInfo;
 use log::{error, info};
 
@@ -13,11 +15,8 @@ extern crate alloc;
 pub mod audio;
 #[macro_use]
 pub mod io;
-mod manager;
 pub mod system;
 pub mod utils;
-
-pub use manager::MANAGER;
 
 // Make the linker happy, as the rust_main will be defined in application crate.
 unsafe extern "C" {
