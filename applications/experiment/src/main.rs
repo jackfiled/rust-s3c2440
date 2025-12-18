@@ -1,24 +1,15 @@
 #![no_std]
 #![no_main]
+extern crate alloc;
 
 mod app;
 
-use rust_s3c2440_std::io::get_char;
-use rust_s3c2440_std::{entry, println};
+use crate::app::App;
+use rust_s3c2440_std::entry;
 
 #[entry]
 fn main() -> ! {
-    println!("Reading test...");
+    let app = App::new();
 
-    for _ in 0..100 {
-        println!("Hello, TQ2440!");
-    }
-
-    loop {
-        let c = get_char();
-        match core::str::from_utf8(core::slice::from_ref(&c)) {
-            Ok(s) => println!("Read char: {s}"),
-            Err(e) => println!("Read error: {e}"),
-        }
-    }
+    app.main_loop()
 }

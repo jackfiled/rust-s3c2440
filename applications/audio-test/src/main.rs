@@ -16,6 +16,10 @@ fn main() -> ! {
     println!("Music player test, will starting after reading a char.");
     let _ = get_char();
     let wav_file = include_bytes!("t1_big_endian.wav");
+    println!(
+        "The base address of wav file is 0x{:x}.",
+        wav_file.as_ptr() as usize
+    );
     let mut player = AudioPlayer::new();
 
     let _ = player.play_wav(wav_file);
