@@ -12,7 +12,7 @@ S3C2440使用的ARM指令集架构为ARMv4T，这也是Rust编译器（或者说
 
 > Fun Fact: 这也是任天堂推出的著名游戏机Game Boy Advance使用的指令集架构。
 
-为了压缩生成的可执行文件体积，该CPU还`thumb`模式，即16位的短指令长度。
+为了压缩生成的可执行文件体积，该CPU还支持`thumb`模式，即16位的短指令长度。
 
 ### 代码结构
 
@@ -33,7 +33,7 @@ S3C2440使用的ARM指令集架构为ARMv4T，这也是Rust编译器（或者说
 
 应用程序则是一个完成具体功能的具体个体，具体列举如下：
 
-- `applications/uart-test`仅使用最基本的引导程序，测试UART部件的初始化和输出是否正常。
+- `applications/uart-test`：仅使用最基本的引导程序，测试UART部件的初始化和输出是否正常。
 - `applications/flash-test`：读写NAND的基本引导程序。
 - `applications/interrupt-test`：测试中断的注册、触发、处理、取消注册是否正常。
 - `applications/audio-test`：播放音乐的测试程序。
